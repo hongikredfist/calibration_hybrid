@@ -65,7 +65,7 @@ pip install -r requirements.txt
 
 ## 빠른 시작
 
-### Phase 1: 데이터 파이프라인 검증 (진행중)
+### Phase 1: 데이터 파이프라인 검증 (완료)
 
 ```bash
 # 1. Unity에서 시뮬레이션 실행 (수동)
@@ -73,8 +73,14 @@ pip install -r requirements.txt
 #    - 시뮬레이션 완료 대기
 #    - StreamingAssets/Calibration/Output/simulation_result.json 생성 확인
 
-# 2. Python으로 결과 파일 읽기 (개발 예정)
-python load_simulation_results.py
+# 2. Python으로 결과 파일 읽기
+python dev/load_simulation_results.py
+
+# 3. 특정 에이전트 상세 보기
+python dev/load_simulation_results.py --agent-id 4236
+
+# 4. 전체 에이전트 상세 통계
+python dev/load_simulation_results.py --verbose
 ```
 
 **Unity 출력 내용**:
@@ -85,19 +91,42 @@ python load_simulation_results.py
 
 ---
 
-### Phase 2: 목적함수 평가 (개발 예정)
+### Phase 2: 목적함수 평가 (완료)
 
 ```bash
-python evaluate_objective.py data/output/sim_result.json
+# 기본 평가
+python dev/evaluate_objective.py
+
+# 상세 시간 증가율 분석
+python dev/evaluate_objective.py --verbose
+
+# 여러 시뮬레이션 결과 비교
+python dev/evaluate_objective.py --compare file1.json file2.json
 ```
 
 **출력 예시**:
 ```
-Objective value: 0.8234
-- Trajectory error: 0.15
-- Stability score: 0.92
-- Energy efficiency: 0.88
+================================================================================
+OBJECTIVE EVALUATION
+================================================================================
+Experiment ID:       ac86cbf1-ae85-4103-b05d-318105dc8a65
+Execution Time:      367.71 seconds
+Total Agents:        5008
+
+METRICS BREAKDOWN:
+--------------------------------------------------------------------------------
+MeanError (50%):            3.6704 m   →     1.8352 weighted
+Percentile95 (30%):         5.9518 m   →     1.7855 weighted
+TimeGrowthPenalty (20%):    4.8625     →     0.9725 weighted
+
+OBJECTIVE VALUE:        4.5932     (lower is better)
+================================================================================
 ```
+
+**Objective Function**:
+- **MeanError (50%)**: 전체 평균 오차 (기본 충실도)
+- **Percentile95 (30%)**: 상위 5% 제외 최대 오차 (극단값 방지)
+- **TimeGrowthPenalty (20%)**: 초반 vs 후반 오차 증가율 (시간 안정성)
 
 ---
 
@@ -161,13 +190,11 @@ calibration_hybrid/
 - `Calibration_hybrid_OutputManager.cs` - 시뮬레이션 결과 수집 및 JSON 출력
 
 ### Python 측
-**현재 사용 가능**:
-- `README.md` - 프로젝트 사용법
-- `CLAUDE.md` - 개발 가이드
+**현재 사용 가능** (`dev/` 폴더):
+- `load_simulation_results.py` - Unity 결과 로드 및 분석
+- `evaluate_objective.py` - 목적함수 평가 (Baseline: 4.5932)
 
 **개발 예정 (Phase별)**:
-- `load_simulation_results.py` - Unity 결과 로드 (다음 작업)
-- `evaluate_objective.py` - 목적함수 평가
 - `generate_parameters.py` - 파라미터 생성
 - `export_to_unity.py` - Unity 포맷 변환
 - `run_optimization.py` - 전체 최적화 실행
@@ -179,11 +206,15 @@ calibration_hybrid/
 - [x] 프로젝트 초기화
 - [x] 개발 계획 수립
 - [x] Unity Output 시스템 구축
-- [ ] Phase 1: 데이터 파이프라인 검증 (진행중)
-  - [x] Unity 출력 시스템 (OutputManager)
-  - [ ] Python 로더 스크립트
-- [ ] Phase 2: Objective Function 구현
-- [ ] Phase 3: 최적화 알고리즘 연결
+- [x] Phase 1: 데이터 파이프라인 검증 (완료)
+  - [x] Unity 출력 시스템 (OutputManager + 파라미터 캐싱)
+  - [x] Python 로더 스크립트 (`load_simulation_results.py`)
+  - [x] 5008 에이전트, 127,729 trajectory points 검증 완료
+- [x] Phase 2: Objective Function 구현 (완료)
+  - [x] 3개 메트릭 설계 (MeanError, Percentile95, TimeGrowthPenalty)
+  - [x] Baseline objective 측정: 4.5932
+  - [x] 시간 누적 오차 분석 (평균 486% 증가 발견)
+- [ ] Phase 3: 최적화 알고리즘 연결 (다음 단계)
 - [ ] Phase 4: 자동화
 
 ---
@@ -191,9 +222,12 @@ calibration_hybrid/
 ## 기술 스택
 
 - **Unity**: PIONA 보행 시뮬레이션
+  - 위치: `D:\UnityProjects\META_VERYOLD_P01_s\`
+  - 스크립트: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 - **Python**: 3.10+
-- **라이브러리**: NumPy, Pandas, Scipy (추후 추가)
-- **데이터 포맷**: JSON / CSV
+- **라이브러리**: NumPy (현재 사용), Scipy/Optuna (Phase 3에서 추가 예정)
+- **데이터 포맷**: JSON
+- **파라미터**: 18개 SFM 파라미터 (bounds 정의됨)
 
 ---
 

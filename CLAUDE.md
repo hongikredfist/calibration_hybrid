@@ -76,9 +76,9 @@ Unity (시뮬레이션)  ←→  Python (최적화)
 
 ## 📍 현재 작업 상태
 
-**현재 Phase**: Phase 1 진행 중
-**현재 작업**: Unity → Python 데이터 파이프라인 구축
-**작업 중인 파일**: Unity OutputManager (완료), Python loader (예정)
+**현재 Phase**: Phase 2 완료, Phase 3 준비 중
+**현재 작업**: 파라미터 생성 및 최적화 알고리즘 연결 준비
+**작업 중인 파일**: N/A
 
 ### 완료 항목
 - [x] 프로젝트 초기화
@@ -90,11 +90,21 @@ Unity (시뮬레이션)  ←→  Python (최적화)
   - 18 SFM 파라미터 수집
   - 에이전트별 오차 데이터 수집
   - JSON 파일 저장
+  - 파라미터 캐싱 (에이전트 destroy 문제 해결)
+- [x] Phase 1: `load_simulation_results.py` 구현 완료
+  - JSON 파일 로드 및 파싱
+  - 18개 파라미터 검증
+  - 에이전트 오차 통계 출력
+  - 특정 에이전트 상세 조회 기능
+- [x] Phase 1: Unity → Python 데이터 파이프라인 검증 완료
+- [x] Phase 2: `evaluate_objective.py` 구현 완료
+  - Objective Function 설계 (3개 메트릭)
+  - MeanError (50%), Percentile95 (30%), TimeGrowthPenalty (20%)
+  - Baseline objective: 4.5932
+  - Verbose mode로 worst time-growth agents 분석
+  - Compare mode로 여러 시뮬레이션 결과 비교
 
 ### 미완료 항목
-- [ ] Phase 1: `load_simulation_results.py` 구현
-- [ ] Phase 1: Unity 시뮬레이션 실행 후 Python 로드 테스트
-- [ ] Phase 2: `evaluate_objective.py` 구현
 - [ ] Phase 3: `generate_parameters.py`, `export_to_unity.py` 구현
 - [ ] Phase 4: `run_optimization.py` 구현
 
@@ -103,38 +113,73 @@ Unity (시뮬레이션)  ←→  Python (최적화)
 ## 🎯 다음 작업
 
 ### 즉시 해야 할 작업
-1. **Python 로더 스크립트** 작성: `load_simulation_results.py`
-   - Unity 저장 JSON 파일 읽기
-   - 데이터 구조 확인 및 출력
-   - 파일 위치: 프로젝트 루트
+**Phase 3: 최적화 알고리즘 연결**
 
-2. **Unity 시뮬레이션 실행** 후 테스트
-   - StreamingAssets/Calibration/Output/simulation_result.json 생성 확인
-   - Python으로 파일 로드 테스트
+1. **파라미터 생성 스크립트** 작성: `dev/generate_parameters.py`
+   - 최적화 알고리즘 선택 (Scipy, Optuna 등)
+   - 18개 SFM 파라미터 bounds 적용
+   - 새로운 파라미터 세트 생성
 
-### Phase 1 완료 조건
-- Unity에서 JSON 파일 생성 성공
-- Python에서 JSON 파일 읽기 성공
-- 파라미터 18개, 에이전트 오차 데이터 확인
+2. **Unity 포맷 변환 스크립트** 작성: `dev/export_to_unity.py`
+   - Python 파라미터 → Unity JSON 포맷 변환
+   - `StreamingAssets/Calibration/Input/` 경로에 저장
+   - Experiment ID 자동 생성
 
-### 예상 출력 경로
-- Unity: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Calibration\Output\simulation_result.json`
-- Python: 위 경로에서 직접 읽거나 `data/output/`로 복사
+3. **수동 최적화 루프 1회 실행**
+   - Baseline 파라미터로 시뮬레이션 → Objective 평가
+   - 새 파라미터 생성 → Unity 실행 → Objective 평가
+   - 개선 여부 확인
+
+### Phase 3 완료 조건
+- 파라미터 생성 및 Unity 포맷 변환 성공
+- 수동으로 최적화 루프 1회 완전 순환
+- Objective value 개선 확인 (4.59 → ?)
+
+### 예상 사용법
+```bash
+# 1. 새 파라미터 생성
+python dev/generate_parameters.py --baseline
+
+# 2. Unity 포맷으로 변환
+python dev/export_to_unity.py --input params.json --output exp_001_parameters.json
+
+# 3. Unity 시뮬레이션 실행 (수동)
+
+# 4. Objective 평가
+python dev/evaluate_objective.py --file exp_001_result.json
+```
 
 ---
 
 ## 📁 Project Structure
 
+### Python Workspace (This Repository)
 ```
 calibration_hybrid/
 ├── data/
-│   ├── input/          # Unity가 읽을 파라미터 (Python → Unity)
-│   └── output/         # Unity 시뮬레이션 결과 (Unity → Python)
-├── dev/                # 개발 중인 스크립트
+│   ├── input/          # Unity 파라미터 복사본 (version control)
+│   ├── output/         # Unity 결과 복사본 (분석용)
+│   └── piona_mvp/
+│       └── scripts/    # Unity C# scripts (참고용 초기 MVP, 실제 사용 안함)
+├── dev/                # 개발 중인 Python 스크립트
 ├── archive/            # deprecated 코드
 ├── .venv/              # Python 가상환경
 ├── README.md           # 프로젝트 개요 및 사용법 (사람 대상)
 └── CLAUDE.md           # (이 파일) Claude Code 개발 가이드
+```
+
+### Unity Project (Actual Development Location)
+```
+D:\UnityProjects\META_VERYOLD_P01_s\
+└── Assets\
+    └── VeryOld_P01_s\
+        └── Dev\
+            └── Calibration_hybrid\          # ← 실제 Unity 스크립트 위치
+                ├── Calibration_hybrid_OutputManager.cs      # JSON 출력 관리
+                ├── Calibration_hybrid_SimulationManager.cs  # 시뮬레이션 제어
+                ├── Calibration_hybrid_SFM.cs                # SFM 에이전트 (18 params)
+                ├── Calibration_hybrid_Empirical.cs          # 실제 궤적 재생
+                └── Calibration_hybrid_ExtractError.cs       # 오차 계산
 ```
 
 ---
@@ -166,27 +211,213 @@ calibration_hybrid/
 ## 📝 개발 중 발견사항
 
 ### 이슈 및 결정사항
-*(작업 진행하면서 여기에 추가)*
 
-**예시**:
-- 2025-01-XX: Unity 결과 파일 포맷을 JSON으로 결정 (CSV보다 중첩 구조 표현 용이)
-- 2025-01-XX: 목적함수는 3가지 메트릭 가중 평균으로 결정
+**2025-01-XX: Unity Calibration System MVP 구현 완료**
+- 5개의 Unity C# 스크립트로 구성된 calibration system 구축
+- 18개 SFM 파라미터 입력 및 시뮬레이션 결과 JSON 출력 기능 완성
+- ParameterInterface가 parameter bounds metadata를 자동 생성 (Python 최적화용)
+
+**2025-01-XX: 데이터 포맷 JSON으로 확정**
+- Unity 결과 파일 포맷: JSON (CSV보다 중첩 구조 표현 용이)
+- Python → Unity 파라미터 파일 포맷: JSON
+- Newtonsoft.Json 사용 (Vector3 custom converter 구현)
 
 ### 데이터 포맷 결정
-*(Unity-Python 간 데이터 포맷이 결정되면 여기에 기록)*
 
-**Unity → Python** (시뮬레이션 결과):
+**Unity → Python** (시뮬레이션 결과): `simulation_result.json`
+
 ```json
-// 추후 정의
+{
+  "experimentId": "guid-string",
+  "startTime": "2025-01-15T10:30:00",
+  "endTime": "2025-01-15T10:35:42",
+  "executionTimeSeconds": 342.5,
+  "totalAgents": 100,
+  "actualAgents": 95,
+  "maxTimeIndex": 300,
+  "actualTimeIndex": 300,
+  "successful": true,
+  "errorMessage": "",
+  "metrics": {
+    "actualAgents": 95,
+    "avgTrajectoryError": 0.234,
+    "maxTrajectoryError": 1.456
+  },
+  "trajectories": [
+    {
+      "agentId": 1,
+      "empiricalPoints": [
+        {
+          "timeIndex": 0,
+          "position": {"x": 1.0, "y": 0.0, "z": 2.0},
+          "speed": 1.2,
+          "timestamp": "2025-01-15T10:30:01"
+        }
+      ],
+      "validationPoints": [
+        {
+          "timeIndex": 0,
+          "position": {"x": 1.05, "y": 0.0, "z": 2.02},
+          "speed": 1.18,
+          "timestamp": "2025-01-15T10:30:01"
+        }
+      ]
+    }
+  ],
+  "avgFPS": 60.0,
+  "memoryUsageMB": 512
+}
 ```
 
-**Python → Unity** (파라미터):
+**Python → Unity** (파라미터): `parameters.json`
+
 ```json
-// 추후 정의
+{
+  "minimalDistance": 0.2,
+  "relaxationTime": 0.5,
+  "repulsionStrengthAgent": 1.2,
+  "repulsionRangeAgent": 5.0,
+  "lambdaAgent": 0.35,
+  "repulsionStrengthObs": 1.0,
+  "repulsionRangeObs": 5.0,
+  "lambdaObs": 0.35,
+  "k": 8.0,
+  "kappa": 5.0,
+  "obsK": 3.0,
+  "obsKappa": 0.0,
+  "considerationRange": 2.5,
+  "viewAngle": 150.0,
+  "viewAngleMax": 240.0,
+  "viewDistance": 5.0,
+  "rayStepAngle": 30.0,
+  "visibleFactor": 0.7,
+  "mass": 1.0,
+  "agentRadius": 0.3,
+  "rotationSpeed": 5.0,
+  "randomSeed": 42,
+  "fidelityLevel": "L3",
+  "agentSamplingRatio": 1.0,
+  "maxTimeIndex": -1,
+  "experimentId": "exp_001",
+  "timestamp": "2025-01-15T10:30:00"
+}
 ```
+
+**Unity Auto-Generated** (parameter bounds metadata): `parameter_bounds.json`
+
+```json
+{
+  "parameter_count": 18,
+  "bounds": {
+    "minimalDistance": {"min": 0.15, "max": 0.35},
+    "relaxationTime": {"min": 0.3, "max": 0.8},
+    "repulsionStrengthAgent": {"min": 0.8, "max": 1.8},
+    "repulsionRangeAgent": {"min": 3.0, "max": 7.0},
+    "lambdaAgent": {"min": 0.2, "max": 0.5},
+    "repulsionStrengthObs": {"min": 0.6, "max": 1.5},
+    "repulsionRangeObs": {"min": 3.0, "max": 7.0},
+    "lambdaObs": {"min": 0.2, "max": 0.5},
+    "k": {"min": 5.0, "max": 12.0},
+    "kappa": {"min": 3.0, "max": 7.0},
+    "obsK": {"min": 2.0, "max": 4.5},
+    "obsKappa": {"min": 0.0, "max": 2.0},
+    "considerationRange": {"min": 2.0, "max": 4.0},
+    "viewAngle": {"min": 120.0, "max": 180.0},
+    "viewAngleMax": {"min": 200.0, "max": 270.0},
+    "viewDistance": {"min": 3.0, "max": 10.0},
+    "rayStepAngle": {"min": 15.0, "max": 45.0},
+    "visibleFactor": {"min": 0.5, "max": 0.9}
+  },
+  "parameter_names": ["minimalDistance", "relaxationTime", ...],
+  "created_at": "2025-01-15 10:30:00"
+}
+```
+
+### Unity C# Components Architecture
+
+**Location**: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
+
+**Calibration_hybrid_OutputManager.cs** (JSON Output Manager)
+- Caches SFM parameters from first spawned agent (prevents parameter loss when agents destroy)
+- Collects error data from `ExtractError` component via reflection
+- Saves `simulation_result.json` to `StreamingAssets/Calibration/Output/`
+- Includes 18 SFM parameters, agent errors, and execution metadata
+- Auto-saves when simulation completes or Unity exits
+
+**Calibration_hybrid_SimulationManager.cs** (Simulation Orchestrator)
+- Loads ATC trajectory CSV data (real pedestrian data)
+- Spawns paired agents (empirical + validation) at correct timepoints
+- Controls simulation speed and frame management
+- Manages agent dictionaries and trajectory data
+- Completes simulation when maxTimeIndex is reached
+
+**Calibration_hybrid_SFM.cs** (Social Force Model - 18 Parameters)
+- Implements Social Force Model with 18 calibration parameters
+- Computes driving force, repulsive forces (agent & obstacle)
+- Handles collision detection and resolution
+- Visibility-based navigation with raycasting
+- Tracks validation trajectory for comparison
+
+**Calibration_hybrid_Empirical.cs** (Real Trajectory Tracking)
+- Plays back real ATC trajectory data
+- Interpolates position between timepoints
+- Renders empirical trajectory with LineRenderer
+- Paired with validation agent for error calculation
+
+**Calibration_hybrid_ExtractError.cs** (Error Calculation)
+- Calculates 2D distance between empirical and validation agents
+- Skips spawn position (first point) to avoid initial error
+- Saves per-agent, per-timepoint error to CSV
+- Used for calibration objective function
+
+### 18 SFM Parameters (Calibration Targets)
+
+**Basic Physics** (2 parameters)
+- `minimalDistance` [0.15, 0.35] - minimum allowed distance between agents
+- `relaxationTime` [0.3, 0.8] - time to reach desired velocity
+
+**Agent Interaction** (3 parameters)
+- `repulsionStrengthAgent` [0.8, 1.8] - social force strength from other agents
+- `repulsionRangeAgent` [3.0, 7.0] - range of agent repulsion
+- `lambdaAgent` [0.2, 0.5] - anisotropic factor (forward vs backward)
+
+**Obstacle Interaction** (3 parameters)
+- `repulsionStrengthObs` [0.6, 1.5] - social force strength from obstacles
+- `repulsionRangeObs` [3.0, 7.0] - range of obstacle repulsion
+- `lambdaObs` [0.2, 0.5] - anisotropic factor for obstacles
+
+**Physical Contact Forces** (4 parameters)
+- `k` [5.0, 12.0] - body force coefficient (agent-agent)
+- `kappa` [3.0, 7.0] - friction force coefficient (agent-agent)
+- `obsK` [2.0, 4.5] - body force coefficient (agent-obstacle)
+- `obsKappa` [0.0, 2.0] - friction force coefficient (agent-obstacle)
+
+**Perception/Vision** (6 parameters)
+- `considerationRange` [2.0, 4.0] - range to consider nearby objects
+- `viewAngle` [120, 180] - default field of view angle (degrees)
+- `viewAngleMax` [200, 270] - maximum field of view when obstructed
+- `viewDistance` [3.0, 10.0] - maximum visibility distance
+- `rayStepAngle` [15, 45] - angular step for raycasting
+- `visibleFactor` [0.5, 0.9] - weight of current velocity in navigation
 
 ### 주의사항
-*(개발 중 발견한 주의사항)*
+
+**Unity Execution**
+- Unity project location: `D:\UnityProjects\META_VERYOLD_P01_s\`
+- Scene name: `Calibration.unity` (must be in Build Settings for batch mode)
+- StreamingAssets path is automatically created by ParameterInterface
+- Results are saved even if Unity crashes (OnDestroy handler)
+
+**Parameter Validation**
+- All parameters are automatically clamped within bounds by `ValidateAndClamp()`
+- Invalid parameters will be corrected, not rejected
+- experimentId links parameters to results
+
+**Trajectory Data**
+- CSV file: `atc_resampled_1s_noQueing.csv` (1-second intervals)
+- Empirical agents follow real data exactly (no physics)
+- Validation agents use SFM physics with the same start/goal points
+- Error calculation starts from 2nd timepoint (skip spawn position)
 
 ---
 
@@ -197,13 +428,41 @@ calibration_hybrid/
 - **CLAUDE.md**: Claude Code 대상 개발 가이드 작성
 - **개발 계획**: 4단계 Phase 계획 수립
 
-*(이후 완료된 작업들을 여기에 추가)*
+### Unity Calibration System
+**Location**: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
+
+- **Calibration_hybrid_OutputManager.cs**: JSON output manager with parameter caching
+- **Calibration_hybrid_SimulationManager.cs**: ATC trajectory loading, agent spawning, frame control
+- **Calibration_hybrid_SFM.cs**: 18-parameter Social Force Model implementation
+- **Calibration_hybrid_Empirical.cs**: Real trajectory playback
+- **Calibration_hybrid_ExtractError.cs**: Error calculation between empirical and validation trajectories
+- **Data Format Specification**: Confirmed JSON structure for Unity→Python communication
+- **Parameter Caching Fix**: Caches SFM parameters at simulation start to prevent loss when agents destroy
+
+### Python Development Scripts
+**Location**: `c:\dev\calibration_hybrid\dev\`
+
+- **load_simulation_results.py**: Load and analyze Unity simulation results
+  - Parses `simulation_result.json` from Unity
+  - Validates 18 SFM parameters
+  - Displays agent error statistics
+  - Supports verbose mode and agent-specific detail view
+  - Usage: `python dev/load_simulation_results.py [--verbose] [--agent-id ID]`
+
+- **evaluate_objective.py**: Compute objective function from simulation results
+  - 3 metrics: MeanError (50%), Percentile95 (30%), TimeGrowthPenalty (20%)
+  - Baseline objective: 4.5932 (lower is better)
+  - Verbose mode shows top 10 worst time-growth agents
+  - Compare mode for multiple simulation results
+  - Usage: `python dev/evaluate_objective.py [--verbose] [--compare file1.json file2.json]`
 
 ---
 
-## 💻 Python Environment
+## 💻 Development Commands
 
-### Activation
+### Python Environment
+
+**Activation**
 ```bash
 # Windows
 .venv\Scripts\activate
@@ -212,27 +471,83 @@ calibration_hybrid/
 source .venv/bin/activate
 ```
 
-### Dependencies (현재 상태)
+**Dependencies** (현재 상태)
 - Python 3.10+
 - 추후 추가: NumPy, Pandas, Scipy (requirements.txt 생성 예정)
+
+### Unity Execution
+
+**Method 1: Unity Editor (Manual Testing)**
+```bash
+# 1. Open Unity project: D:\UnityProjects\META_VERYOLD_P01_s\
+# 2. Open Calibration scene
+# 3. Press Play button
+# 4. Check StreamingAssets/Calibration/Output/simulation_result.json
+```
+
+**Method 2: Batch Mode (Python Automation)**
+```bash
+# From Python script, execute Unity in batch mode with parameters
+"C:\Program Files\Unity\Hub\Editor\<version>\Editor\Unity.exe" \
+  -quit \
+  -batchmode \
+  -projectPath "D:\UnityProjects\META_VERYOLD_P01_s" \
+  -executeMethod Calibration_ParameterInterface.ExecuteBatchModeSimulation \
+  -logFile "logs/unity_simulation.log" \
+  -parametermode \
+  -autoexit \
+  -parameterfile "exp_001_parameters.json" \
+  -resultfile "exp_001_result.json" \
+  -seed 42
+```
+
+**Command-line Arguments for ParameterInterface**
+- `-parametermode` - Enable parameter loading from JSON
+- `-autoexit` - Automatically exit Unity after simulation completes
+- `-parameterfile <filename>` - Specify parameter JSON filename (in Input folder)
+- `-resultfile <filename>` - Specify result JSON filename (in Output folder)
+- `-seed <int>` - Set random seed for reproducibility
+
+**Method 3: Editor Mode MenuItem (Legacy)**
+```bash
+# In Unity Editor menu bar:
+# Calibration > Legacy - Run Single Simulation
+# (Uses latest parameter file in Input folder)
+```
 
 ---
 
 ## 🔍 Important Conventions
 
 ### Data Format
-- **Unity → Python**: JSON 또는 CSV (시뮬레이션 결과)
-- **Python → Unity**: JSON 또는 CSV (파라미터 설정)
+- **Unity → Python**: JSON (시뮬레이션 결과)
+- **Python → Unity**: JSON (파라미터 설정)
+- **Vector3 Serialization**: Custom JsonConverter handles Unity Vector3 to prevent circular references
 
 ### File Locations
-- Unity 출력: `data/output/`
-- Unity 입력: `data/input/`
-- 개발 스크립트: 프로젝트 루트 또는 `dev/`
+
+**Unity Project**:
+- **Unity Scripts** (actual development): `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
+- **StreamingAssets** (runtime I/O):
+  - Input: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Calibration\Input\`
+  - Output: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Calibration\Output\`
+  - Trajectory data: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Data\PedestrianTrajectory\ATC\`
+
+**Python Workspace** (this repository):
+- `data/input/` - Parameter files copy (version control)
+- `data/output/` - Results copy (analysis)
+- `data/piona_mvp/scripts/` - Reference only (초기 MVP, 실제 사용 안함)
+- Development scripts: Project root or `dev/`
 
 ### Gitignore
-- `data/` - 데이터 파일 (git 추적 안함)
-- `archive/` - deprecated 코드 (git 추적 안함)
-- `.venv/` - Python 가상환경
+- `data/` - Data files (not tracked by git)
+- `archive/` - Deprecated code (not tracked by git)
+- `.venv/` - Python virtual environment
+
+### Naming Conventions
+- Parameter files: `<experimentId>_parameters.json` (e.g., `exp_001_parameters.json`)
+- Result files: `<experimentId>_result.json` (e.g., `exp_001_result.json`)
+- Experiment IDs: Use descriptive names (e.g., `baseline`, `opt_iter_5`) or GUIDs
 
 ---
 
