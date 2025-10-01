@@ -26,10 +26,7 @@ Unity PIONA 보행 시뮬레이션의 파라미터를 실제 데이터에 맞게
 - Unity: 고성능 시뮬레이션 실행
 - Python: 결과 분석 및 최적화 알고리즘
 
----
-
-## 시스템 구조
-
+**시스템 구조**:
 ```
 Python (파라미터 생성)
     ↓
@@ -42,128 +39,142 @@ Python (결과 평가 → 새 파라미터)
 
 ---
 
+## 현재 상태
+
+- [x] Phase 1: 데이터 파이프라인 검증 (완료)
+- [x] Phase 2: Objective Function 구현 (완료 - Baseline: 4.5932)
+- [x] Phase 3: 최적화 알고리즘 연결 (완료 - 테스트 대기)
+  - Scipy Differential Evolution
+  - Manual mode (사용자가 Unity 수동 실행)
+- [ ] Phase 4: 자동화 (개발 예정)
+
+---
+
 ## 설치
 
-### 1. Python 환경 설정
 ```bash
-# Windows
-.venv\Scripts\activate
+# 1. Python 가상환경 활성화
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Unix/Mac
 
-# Unix/Mac
-source .venv/bin/activate
-
-# 패키지 설치 (추후)
+# 2. 패키지 설치
 pip install -r requirements.txt
 ```
 
-### 2. Unity 프로젝트
-- Unity 프로젝트 위치: `D:\UnityProjects\META_VERYOLD_P01_s\`
-- `Calibration_hybrid_OutputManager.cs` 컴포넌트 추가
+**Unity 프로젝트**:
+- 위치: `D:\UnityProjects\META_VERYOLD_P01_s\`
 - 출력 경로: `StreamingAssets/Calibration/Output/simulation_result.json`
 
 ---
 
 ## 빠른 시작
 
-### Phase 1: 데이터 파이프라인 검증 (완료)
-
+### Step 1: 환경 설정 및 Unity 실행
 ```bash
-# 1. Unity에서 시뮬레이션 실행 (수동)
-#    - Unity Play 버튼 클릭
-#    - 시뮬레이션 완료 대기
-#    - StreamingAssets/Calibration/Output/simulation_result.json 생성 확인
+# Python 환경 준비
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-# 2. Python으로 결과 파일 읽기
+Unity에서 Calibration scene 실행 → 시뮬레이션 완료 대기 (5-10분)
+
+### Step 2: 결과 분석
+```bash
+# Unity 결과 확인
 python dev/load_simulation_results.py
 
-# 3. 특정 에이전트 상세 보기
-python dev/load_simulation_results.py --agent-id 4236
-
-# 4. 전체 에이전트 상세 통계
-python dev/load_simulation_results.py --verbose
+# Objective 평가
+python dev/evaluate_objective.py
+# 출력: Baseline Objective = 4.5932
 ```
 
-**Unity 출력 내용**:
-- 18개 SFM 파라미터
-- 에이전트별 궤적 오차 데이터
-- 평균/최대 오차 통계
-- 실험 메타데이터 (ID, 시간, 실행시간)
+### Step 3: 최적화 시작
+```bash
+# Baseline 파라미터 생성
+python dev/generate_parameters.py --baseline
+
+# 테스트 최적화 (2 iterations)
+python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+```
+
+각 iteration마다 Unity 수동 실행 필요 → Phase 4에서 자동화 예정
 
 ---
 
-### Phase 2: 목적함수 평가 (완료)
+## 상세 사용법
+
+### Phase 1-2: 데이터 검증 및 평가
 
 ```bash
-# 기본 평가
+# 기본 로드 및 분석
+python dev/load_simulation_results.py
+
+# Objective 평가
 python dev/evaluate_objective.py
 
-# 상세 시간 증가율 분석
+# 상세 옵션
+python dev/load_simulation_results.py --verbose --agent-id 4236
 python dev/evaluate_objective.py --verbose
-
-# 여러 시뮬레이션 결과 비교
-python dev/evaluate_objective.py --compare file1.json file2.json
+python dev/evaluate_objective.py --compare result1.json result2.json
 ```
 
-**출력 예시**:
+**Objective Function** (Lower is better):
 ```
-================================================================================
-OBJECTIVE EVALUATION
-================================================================================
-Experiment ID:       ac86cbf1-ae85-4103-b05d-318105dc8a65
-Execution Time:      367.71 seconds
-Total Agents:        5008
-
-METRICS BREAKDOWN:
---------------------------------------------------------------------------------
-MeanError (50%):            3.6704 m   →     1.8352 weighted
-Percentile95 (30%):         5.9518 m   →     1.7855 weighted
-TimeGrowthPenalty (20%):    4.8625     →     0.9725 weighted
-
-OBJECTIVE VALUE:        4.5932     (lower is better)
-================================================================================
+Objective = 0.50 * MeanError + 0.30 * Percentile95 + 0.20 * TimeGrowth
+Baseline: 4.5932
 ```
 
-**Objective Function**:
-- **MeanError (50%)**: 전체 평균 오차 (기본 충실도)
-- **Percentile95 (30%)**: 상위 5% 제외 최대 오차 (극단값 방지)
-- **TimeGrowthPenalty (20%)**: 초반 vs 후반 오차 증가율 (시간 안정성)
+### Phase 3: 파라미터 최적화
+
+**Optimization Algorithm**: Scipy Differential Evolution (population-based, gradient-free)
+
+#### 기본 사용법
+
+```bash
+# 1. Baseline 파라미터 생성
+python dev/generate_parameters.py --baseline
+
+# 2. Unity JSON 변환 (선택사항)
+python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
+
+# 3. 테스트 최적화 (2 iterations, ~10 evaluations)
+python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+
+# 4. 전체 최적화 (50 iterations, ~750 evaluations, 1-3일 소요)
+python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
+```
+
+#### 최적화 실행 흐름 (Manual Mode)
+
+1. Python이 새 파라미터 생성 → Unity JSON 저장
+2. 화면에 "Press ENTER after Unity simulation completes..." 표시
+3. **사용자가 Unity Play 버튼 클릭 → 시뮬레이션 실행 (수동)**
+4. 시뮬레이션 완료 후 Python 콘솔에서 ENTER
+5. Python이 결과 로드 → Objective 계산
+6. Differential Evolution이 다음 파라미터 생성
+7. 반복...
+
+#### 출력 파일
+
+- `data/output/optimization_history.csv` - 전체 평가 이력
+- `data/output/best_parameters.json` - 최고 성능 파라미터
 
 ---
 
-### Phase 3: 파라미터 최적화 (개발 예정)
+## Quick Reference
 
+| 스크립트 | 용도 | 주요 옵션 |
+|---------|------|----------|
+| `load_simulation_results.py` | Unity 결과 로드 | `--verbose`, `--agent-id` |
+| `evaluate_objective.py` | Objective 계산 | `--verbose`, `--compare` |
+| `export_to_unity.py` | Python → Unity 변환 | `--input`, `--auto-id` |
+| `generate_parameters.py` | 파라미터 생성/최적화 | `--baseline`, `--optimize --manual` |
+
+**자주 사용하는 커맨드**:
 ```bash
-# 새 파라미터 생성
-python generate_parameters.py --objective 0.8234
-
-# Unity 포맷으로 변환
-python export_to_unity.py parameters.json data/input/params.json
-```
-
-**출력 예시**:
-```
-Generated new parameters:
-- param_1: 1.234
-- param_2: 0.567
-...
-Exported to: data/input/params.json
-```
-
----
-
-### Phase 4: 완전 자동화 (개발 예정)
-
-```bash
-python run_optimization.py --iterations 20
-```
-
-**출력 예시**:
-```
-Iteration 1/20: objective = 0.8234
-Iteration 2/20: objective = 0.8456
-...
-Best objective: 0.9123
-Best parameters saved to: results/best_params.json
+python dev/evaluate_objective.py
+python dev/generate_parameters.py --baseline
+python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
 ```
 
 ---
@@ -173,76 +184,51 @@ Best parameters saved to: results/best_params.json
 ```
 calibration_hybrid/
 ├── data/
-│   ├── input/              # Unity가 읽을 파라미터
-│   └── output/             # Unity 시뮬레이션 결과
-├── dev/                    # 개발 중인 스크립트
-├── results/                # 최적화 결과 (자동 생성)
-├── .venv/                  # Python 가상환경
-├── README.md               # 프로젝트 사용법 (이 파일)
-└── CLAUDE.md               # Claude Code 개발 가이드
+│   ├── input/              # Python → Unity 파라미터
+│   └── output/             # Unity → Python 결과
+├── dev/                    # Python 스크립트
+│   ├── load_simulation_results.py
+│   ├── evaluate_objective.py
+│   ├── export_to_unity.py
+│   └── generate_parameters.py
+├── requirements.txt
+├── README.md               # 사용법 (이 파일)
+└── CLAUDE.md               # 개발자 가이드
 ```
 
----
-
-## 주요 파일
-
-### Unity 측 (구축 완료)
-- `Calibration_hybrid_OutputManager.cs` - 시뮬레이션 결과 수집 및 JSON 출력
-
-### Python 측
-**현재 사용 가능** (`dev/` 폴더):
-- `load_simulation_results.py` - Unity 결과 로드 및 분석
-- `evaluate_objective.py` - 목적함수 평가 (Baseline: 4.5932)
-
-**개발 예정 (Phase별)**:
-- `generate_parameters.py` - 파라미터 생성
-- `export_to_unity.py` - Unity 포맷 변환
-- `run_optimization.py` - 전체 최적화 실행
-
----
-
-## 현재 상태
-
-- [x] 프로젝트 초기화
-- [x] 개발 계획 수립
-- [x] Unity Output 시스템 구축
-- [x] Phase 1: 데이터 파이프라인 검증 (완료)
-  - [x] Unity 출력 시스템 (OutputManager + 파라미터 캐싱)
-  - [x] Python 로더 스크립트 (`load_simulation_results.py`)
-  - [x] 5008 에이전트, 127,729 trajectory points 검증 완료
-- [x] Phase 2: Objective Function 구현 (완료)
-  - [x] 3개 메트릭 설계 (MeanError, Percentile95, TimeGrowthPenalty)
-  - [x] Baseline objective 측정: 4.5932
-  - [x] 시간 누적 오차 분석 (평균 486% 증가 발견)
-- [ ] Phase 3: 최적화 알고리즘 연결 (다음 단계)
-- [ ] Phase 4: 자동화
+**Unity 프로젝트**: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 
 ---
 
 ## 기술 스택
 
 - **Unity**: PIONA 보행 시뮬레이션
-  - 위치: `D:\UnityProjects\META_VERYOLD_P01_s\`
-  - 스크립트: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
-- **Python**: 3.10+
-- **라이브러리**: NumPy (현재 사용), Scipy/Optuna (Phase 3에서 추가 예정)
-- **데이터 포맷**: JSON
-- **파라미터**: 18개 SFM 파라미터 (bounds 정의됨)
+- **Python 3.10+**: NumPy, Scipy (Differential Evolution), Matplotlib, tqdm
+- **데이터**: JSON format, 18 SFM parameters with bounds
 
 ---
 
 ## 문제 해결
 
-### Unity 결과 파일을 찾을 수 없음
-- `data/output/` 디렉토리가 존재하는지 확인
-- Unity에서 저장 경로 설정 확인
+**Unity 결과 파일을 찾을 수 없음**:
+- Unity 시뮬레이션이 정상 완료되었는지 확인
+- 출력 경로: `StreamingAssets/Calibration/Output/simulation_result.json`
 
-### Python 스크립트 실행 오류
-- 가상환경이 활성화되었는지 확인: `.venv\Scripts\activate`
-- 필요한 패키지가 설치되었는지 확인: `pip list`
+**Python 스크립트 실행 오류**:
+```bash
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip list  # 설치 확인
+```
+
+**Optimization이 개선되지 않음**:
+- Local minimum 가능성: population size 증가 (`--popsize 20`)
+- 더 많은 generation: `--maxiter 100`
+- Optimization history 분석: `data/output/optimization_history.csv`
 
 ---
 
 ## 참고
 
-자세한 개발 정보, 코드 구조, 이슈 해결은 **CLAUDE.md** 참고
+- **CLAUDE.md**: 개발 가이드, 코드 구조, 알고리즘 상세 설명
+- **Unity C# Scripts**: `D:\UnityProjects\...\Calibration_hybrid\`

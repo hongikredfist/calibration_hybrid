@@ -76,8 +76,8 @@ Unity (시뮬레이션)  ←→  Python (최적화)
 
 ## 📍 현재 작업 상태
 
-**현재 Phase**: Phase 2 완료, Phase 3 준비 중
-**현재 작업**: 파라미터 생성 및 최적화 알고리즘 연결 준비
+**현재 Phase**: Phase 3 완료 (테스트 대기)
+**현재 작업**: 수동 최적화 루프 테스트 준비
 **작업 중인 파일**: N/A
 
 ### 완료 항목
@@ -103,50 +103,67 @@ Unity (시뮬레이션)  ←→  Python (최적화)
   - Baseline objective: 4.5932
   - Verbose mode로 worst time-growth agents 분석
   - Compare mode로 여러 시뮬레이션 결과 비교
+- [x] Phase 3: `export_to_unity.py` 구현 완료
+  - Python parameters → Unity JSON 변환
+  - Experiment ID 자동 생성
+  - 파라미터 검증 및 clamping
+  - StreamingAssets/Input/ 경로 저장
+- [x] Phase 3: `generate_parameters.py` 구현 완료
+  - Scipy Differential Evolution 통합
+  - Baseline parameter 생성
+  - Manual mode (Phase 3용)
+  - Optimization history tracking (CSV)
+  - 18-parameter bounds 적용
 
 ### 미완료 항목
-- [ ] Phase 3: `generate_parameters.py`, `export_to_unity.py` 구현
-- [ ] Phase 4: `run_optimization.py` 구현
+- [ ] Phase 3: 수동 최적화 루프 테스트 (1-5 iterations)
+- [ ] Phase 4: `run_optimization.py` 구현 (자동화)
 
 ---
 
 ## 🎯 다음 작업
 
 ### 즉시 해야 할 작업
-**Phase 3: 최적화 알고리즘 연결**
+**Phase 3 테스트: 수동 최적화 루프 검증**
 
-1. **파라미터 생성 스크립트** 작성: `dev/generate_parameters.py`
-   - 최적화 알고리즘 선택 (Scipy, Optuna 등)
-   - 18개 SFM 파라미터 bounds 적용
-   - 새로운 파라미터 세트 생성
+1. **Baseline 파라미터 생성 및 테스트**
+   ```bash
+   python dev/generate_parameters.py --baseline
+   python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
+   # Unity 실행 → simulation_result.json 생성
+   python dev/evaluate_objective.py
+   ```
 
-2. **Unity 포맷 변환 스크립트** 작성: `dev/export_to_unity.py`
-   - Python 파라미터 → Unity JSON 포맷 변환
-   - `StreamingAssets/Calibration/Input/` 경로에 저장
-   - Experiment ID 자동 생성
+2. **수동 최적화 루프 1-2회 테스트**
+   ```bash
+   python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+   # 각 iteration마다 Unity 실행, objective 비교
+   ```
 
-3. **수동 최적화 루프 1회 실행**
-   - Baseline 파라미터로 시뮬레이션 → Objective 평가
-   - 새 파라미터 생성 → Unity 실행 → Objective 평가
-   - 개선 여부 확인
+3. **결과 분석 및 개선 확인**
+   - Baseline objective (4.5932) vs Optimized objective 비교
+   - Optimization history CSV 분석
+   - Best parameters 확인
 
-### Phase 3 완료 조건
-- 파라미터 생성 및 Unity 포맷 변환 성공
-- 수동으로 최적화 루프 1회 완전 순환
-- Objective value 개선 확인 (4.59 → ?)
+### Phase 3 최종 완료 조건
+- Baseline 파라미터 export/Unity 실행 성공
+- Differential Evolution 2-5 iterations 테스트 성공
+- Optimization history 정상 저장
+- Objective 개선 추세 확인 (또는 왜 개선 안되는지 분석)
 
-### 예상 사용법
+### 실제 사용법 (구현 완료)
 ```bash
-# 1. 새 파라미터 생성
+# Method 1: Baseline 파라미터만 생성
 python dev/generate_parameters.py --baseline
 
-# 2. Unity 포맷으로 변환
-python dev/export_to_unity.py --input params.json --output exp_001_parameters.json
+# Method 2: 파라미터를 Unity JSON으로 변환
+python dev/export_to_unity.py --input baseline_parameters.json --auto-id
 
-# 3. Unity 시뮬레이션 실행 (수동)
+# Method 3: 수동 최적화 실행 (테스트용: 2 generations, 5 individuals)
+python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
 
-# 4. Objective 평가
-python dev/evaluate_objective.py --file exp_001_result.json
+# Method 4: 실제 최적화 실행 (50 generations, 15 individuals = 750 evals)
+python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
 ```
 
 ---
@@ -196,10 +213,11 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 - **파일**: `evaluate_objective.py`
 - **완료 조건**: 시뮬레이션 결과에 대한 정량적 평가 점수 산출
 
-### Phase 3: 최적화 알고리즘 연결
+### Phase 3: 최적화 알고리즘 연결 (완료 - 테스트 대기)
 - **목표**: 파라미터 생성 및 변환
 - **파일**: `generate_parameters.py`, `export_to_unity.py`
 - **완료 조건**: 수동으로 최적화 루프 1회 완전 순환
+- **상태**: 구현 완료, 사용자 테스트 대기
 
 ### Phase 4: 자동화
 - **목표**: 전체 워크플로우 자동 실행
@@ -221,6 +239,30 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 - Unity 결과 파일 포맷: JSON (CSV보다 중첩 구조 표현 용이)
 - Python → Unity 파라미터 파일 포맷: JSON
 - Newtonsoft.Json 사용 (Vector3 custom converter 구현)
+
+**2025-01-XX: Optimization Algorithm - Scipy Differential Evolution 선택**
+- TuRBO/ASHA 대신 Scipy DE 선택 이유:
+  - 18-dim continuous optimization에 적합 (TuRBO는 50+ dim에서 강점)
+  - Gradient-free (Unity는 미분 불가능한 black-box)
+  - 단순한 설정 (하이퍼파라미터 3-4개만)
+  - 프로젝트 철학 (단순함 유지) 부합
+  - 30년 검증된 robust algorithm
+- 설정: popsize=15, maxiter=50, strategy='best1bin'
+- 예상 총 평가 횟수: ~750 Unity simulations
+
+**2025-01-XX: Unity → Python 파라미터 로딩 시스템 구축**
+- `Calibration_hybrid_InputManager.cs` 생성 (OutputManager와 동일한 패턴)
+- Python export_to_unity.py가 생성한 JSON 파일 자동 로드
+- `StreamingAssets/Calibration/Input/` 폴더에서 최신 `*_parameters.json` 자동 탐색
+- `Calibration_hybrid_SFM.cs` 수정: Start()에서 InputManager로부터 18개 파라미터 자동 로드
+- Parameter validation 및 bounds clamping 적용
+
+**2025-01-XX: Unity 자동 종료 기능 추가**
+- `Calibration_hybrid_OutputManager.cs`에 `autoStopPlayMode` 옵션 추가
+- 시뮬레이션 완료 및 결과 저장 후 자동으로 Unity Play 모드 종료
+- Manual Optimization 워크플로우 개선 (수동 정지 단계 제거)
+- Editor mode: `EditorApplication.isPlaying = false`
+- Build mode: `Application.Quit()`
 
 ### 데이터 포맷 결정
 
@@ -455,6 +497,24 @@ D:\UnityProjects\META_VERYOLD_P01_s\
   - Verbose mode shows top 10 worst time-growth agents
   - Compare mode for multiple simulation results
   - Usage: `python dev/evaluate_objective.py [--verbose] [--compare file1.json file2.json]`
+
+- **export_to_unity.py**: Export Python parameters to Unity JSON format
+  - Converts Python dict to Unity-compatible JSON
+  - Auto-generates experiment IDs (timestamp + UUID)
+  - Validates parameters against 18 SFM bounds
+  - Automatic parameter clamping for out-of-bounds values
+  - Saves to StreamingAssets/Calibration/Input/
+  - Usage: `python dev/export_to_unity.py --input params.json --auto-id`
+
+- **generate_parameters.py**: Parameter generation and optimization with Scipy DE
+  - Creates baseline parameters from Unity defaults
+  - Scipy Differential Evolution optimization
+  - Manual mode: exports params, waits for user to run Unity, loads results
+  - Auto mode: Phase 4 (not yet implemented)
+  - Optimization history tracking (CSV)
+  - Best parameters auto-save
+  - Usage: `python dev/generate_parameters.py --baseline`
+  - Usage: `python dev/generate_parameters.py --optimize --manual --maxiter 5 --popsize 10`
 
 ---
 

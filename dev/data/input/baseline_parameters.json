@@ -1,0 +1,20 @@
+{
+  "minimalDistance": 0.2,
+  "relaxationTime": 0.5,
+  "repulsionStrengthAgent": 1.2,
+  "repulsionRangeAgent": 5.0,
+  "lambdaAgent": 0.35,
+  "repulsionStrengthObs": 1.0,
+  "repulsionRangeObs": 5.0,
+  "lambdaObs": 0.35,
+  "k": 8.0,
+  "kappa": 5.0,
+  "obsK": 3.0,
+  "obsKappa": 0.0,
+  "considerationRange": 2.5,
+  "viewAngle": 150.0,
+  "viewAngleMax": 240.0,
+  "viewDistance": 5.0,
+  "rayStepAngle": 30.0,
+  "visibleFactor": 0.7
+}
