@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
+from datetime import datetime
 
 DEFAULT_UNITY_OUTPUT = r"D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Calibration\Output\simulation_result.json"
 
@@ -207,6 +208,49 @@ def print_evaluation(simulation_result: Dict[str, Any], metrics: Dict[str, float
             print(f"{agent_id:<12} {early:<15.4f} {late:<15.4f} {growth:+14.2%}")
         print()
 
+def save_baseline_objective(
+    simulation_result: Dict[str, Any],
+    objective: float,
+    metrics: Dict[str, float],
+    output_path: str = "data/output/baseline_objective.json"
+):
+    """
+    Save baseline objective for future comparison.
+
+    Args:
+        simulation_result: Full simulation result data
+        objective: Computed objective value
+        metrics: Metrics breakdown
+        output_path: Path to save baseline JSON
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    baseline_data = {
+        "objective": objective,
+        "metrics": metrics,
+        "timestamp": datetime.now().isoformat(),
+        "experimentId": simulation_result.get("experimentId", "N/A"),
+        "parameters": simulation_result.get("parameters", {}),
+        "totalAgents": simulation_result.get("totalAgents", 0),
+        "executionTimeSeconds": simulation_result.get("executionTimeSeconds", 0)
+    }
+
+    with open(output_path, 'w') as f:
+        json.dump(baseline_data, f, indent=2)
+
+    print("=" * 80)
+    print("BASELINE OBJECTIVE SAVED")
+    print("=" * 80)
+    print(f"Output file:     {output_path}")
+    print(f"Objective value: {objective:.4f}")
+    print(f"Timestamp:       {baseline_data['timestamp']}")
+    print()
+    print("This baseline will be used for comparison in future optimizations.")
+    print("To update baseline, run this command again with --save-baseline")
+    print("=" * 80)
+    print()
+
 def compare_evaluations(filepaths: List[str]):
     """Compare objective values across multiple simulation results."""
     print("=" * 80)
@@ -293,6 +337,12 @@ Examples:
         help='Compare multiple simulation results'
     )
 
+    parser.add_argument(
+        '--save-baseline',
+        action='store_true',
+        help='Save current result as baseline for future optimization comparison'
+    )
+
     args = parser.parse_args()
 
     try:
@@ -302,6 +352,9 @@ Examples:
             data = load_simulation_result(args.file)
             objective, metrics = evaluate_objective(data)
             print_evaluation(data, metrics, verbose=args.verbose)
+
+            if args.save_baseline:
+                save_baseline_objective(data, objective, metrics)
 
             print(f"[OK] Objective value computed: {objective:.4f}")
             print(f"[OK] Lower is better (optimization goal: minimize this value)")

@@ -76,8 +76,8 @@ Unity (시뮬레이션)  ←→  Python (최적화)
 
 ## 📍 현재 작업 상태
 
-**현재 Phase**: Phase 3 완료 (테스트 대기)
-**현재 작업**: 수동 최적화 루프 테스트 준비
+**현재 Phase**: Phase 3 완료 (Phase 4 대기)
+**현재 작업**: Phase 4 자동화 구현 준비
 **작업 중인 파일**: N/A
 
 ### 완료 항목
@@ -108,59 +108,68 @@ Unity (시뮬레이션)  ←→  Python (최적화)
   - Experiment ID 자동 생성
   - 파라미터 검증 및 clamping
   - StreamingAssets/Input/ 경로 저장
-- [x] Phase 3: `generate_parameters.py` 구현 완료
+- [x] Phase 3: `generate_parameters.py` 구현 완료 및 수정
   - Scipy Differential Evolution 통합
   - Baseline parameter 생성
   - Manual mode (Phase 3용)
   - Optimization history tracking (CSV)
   - 18-parameter bounds 적용
+  - **Iteration counting 버그 수정 (2025-01-XX)**
+    - `maxiter * popsize`로 총 평가 횟수 정확히 제한
+    - StopIteration → RuntimeError 발생 → Callback 방식으로 최종 해결
+    - Scipy의 `callback` 메커니즘으로 정상 종료 처리
+  - **Optimization history 분석 기능 추가 (2025-01-XX)**
+    - `--analyze` mode 추가
+    - Summary statistics (best/worst/mean/std)
+    - Best objective per generation
+    - Convergence plot (matplotlib)
+  - **Baseline objective 저장 및 비교 기능 추가 (2025-01-XX)**
+    - `load_baseline_objective()` - 파일에서 baseline 자동 로드
+    - Optimization 및 분석 시 baseline과 자동 비교
+    - Convergence plot에 baseline 수평선 표시
+- [x] Phase 3: `evaluate_objective.py` 수정
+  - **Baseline 저장 기능 추가 (2025-01-XX)**
+    - `save_baseline_objective()` 함수
+    - `--save-baseline` CLI 옵션
+    - `data/output/baseline_objective.json` 생성
 
 ### 미완료 항목
-- [ ] Phase 3: 수동 최적화 루프 테스트 (1-5 iterations)
 - [ ] Phase 4: `run_optimization.py` 구현 (자동화)
+  - Unity batch mode 자동 실행
+  - Subprocess 관리 (timeout, error handling)
+  - Progress tracking (tqdm)
+  - Checkpoint/resume 기능
 
 ---
 
 ## 🎯 다음 작업
 
 ### 즉시 해야 할 작업
-**Phase 3 테스트: 수동 최적화 루프 검증**
+**Phase 4 준비: 자동화 구현 대기**
 
-1. **Baseline 파라미터 생성 및 테스트**
-   ```bash
-   python dev/generate_parameters.py --baseline
-   python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
-   # Unity 실행 → simulation_result.json 생성
-   python dev/evaluate_objective.py
-   ```
+사용자가 Phase 3 수동 테스트를 완료하면 Phase 4 자동화로 진행
 
-2. **수동 최적화 루프 1-2회 테스트**
-   ```bash
-   python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
-   # 각 iteration마다 Unity 실행, objective 비교
-   ```
+**Phase 4 구현 내용 (예정)**:
+- `run_optimization.py` 구현
+- Unity batch mode 자동 실행
+- 전체 워크플로우 무인 실행
 
-3. **결과 분석 및 개선 확인**
-   - Baseline objective (4.5932) vs Optimized objective 비교
-   - Optimization history CSV 분석
-   - Best parameters 확인
-
-### Phase 3 최종 완료 조건
-- Baseline 파라미터 export/Unity 실행 성공
-- Differential Evolution 2-5 iterations 테스트 성공
-- Optimization history 정상 저장
-- Objective 개선 추세 확인 (또는 왜 개선 안되는지 분석)
-
-### 실제 사용법 (구현 완료)
+### Phase 3 사용법 (구현 완료)
 ```bash
-# Method 1: Baseline 파라미터만 생성
+# Method 1: Baseline 파라미터 생성 및 저장
 python dev/generate_parameters.py --baseline
+python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
+# Unity 실행 (Play 버튼)
+python dev/evaluate_objective.py --save-baseline
+# → data/output/baseline_objective.json 생성
 
-# Method 2: 파라미터를 Unity JSON으로 변환
-python dev/export_to_unity.py --input baseline_parameters.json --auto-id
-
-# Method 3: 수동 최적화 실행 (테스트용: 2 generations, 5 individuals)
+# Method 2: 수동 최적화 실행 (테스트: 2 generation, 5 evals)
 python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+# → Baseline 자동 로드하여 비교
+
+# Method 3: Optimization history 분석
+python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
+# → Baseline 비교 및 convergence plot 생성
 
 # Method 4: 실제 최적화 실행 (50 generations, 15 individuals = 750 evals)
 python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
@@ -203,26 +212,29 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 
 ## 🚀 Development Roadmap
 
-### Phase 1: 데이터 파이프라인 검증 (👈 현재 단계)
+### Phase 1: 데이터 파이프라인 검증 ✅
 - **목표**: Unity ↔ Python 데이터 교환 확인
 - **파일**: `load_simulation_results.py`
 - **완료 조건**: Unity 출력 파일을 Python에서 정상적으로 읽고 내용 출력
+- **상태**: 완료
 
-### Phase 2: Objective Function 구현
+### Phase 2: Objective Function 구현 ✅
 - **목표**: 시뮬레이션 결과 정량적 평가
 - **파일**: `evaluate_objective.py`
 - **완료 조건**: 시뮬레이션 결과에 대한 정량적 평가 점수 산출
+- **상태**: 완료
 
-### Phase 3: 최적화 알고리즘 연결 (완료 - 테스트 대기)
+### Phase 3: 최적화 알고리즘 연결 ✅
 - **목표**: 파라미터 생성 및 변환
 - **파일**: `generate_parameters.py`, `export_to_unity.py`
 - **완료 조건**: 수동으로 최적화 루프 1회 완전 순환
-- **상태**: 구현 완료, 사용자 테스트 대기
+- **상태**: 완료
 
-### Phase 4: 자동화
+### Phase 4: 자동화 (👈 다음 단계)
 - **목표**: 전체 워크플로우 자동 실행
 - **파일**: `run_optimization.py`
 - **완료 조건**: 사용자 개입 없이 N회 최적화 반복 실행
+- **상태**: 대기
 
 ---
 
@@ -263,6 +275,57 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 - Manual Optimization 워크플로우 개선 (수동 정지 단계 제거)
 - Editor mode: `EditorApplication.isPlaying = false`
 - Build mode: `Application.Quit()`
+
+**2025-01-XX: generate_parameters.py Iteration Counting 버그 수정**
+- **문제**: Scipy DE maxiter 조정 로직 오류로 iteration이 무한 증가
+  - `scipy_maxiter = maxiter - 1` 계산이 부정확
+  - Convergence 실패 시 계속 실행됨
+  - User expects `maxiter=1, popsize=5` → 5 evals, but got 6+ evals
+- **1차 해결 (StopIteration 방식)**:
+  - Total evaluations 기준으로 변경: `max_evaluations = maxiter * popsize`
+  - Evaluation counter로 hard limit 적용
+  - Limit 도달 시 `StopIteration` 예외로 정상 종료
+  - `scipy_maxiter = maxiter * 10` (safety margin, 실제로는 StopIteration으로 제어)
+- **문제 발생**: RuntimeError "func(x, *args) must return a scalar value"
+  - StopIteration이 scipy 내부 `_calculate_population_energies()`에서 잘못 처리됨
+  - Scipy는 objective function이 scalar를 반환할 것으로 기대
+  - Exception 발생 시점에 scipy가 에너지 계산 시도하면서 충돌
+- **최종 해결 (Callback 방식)**:
+  - StopIteration 대신 scipy의 `callback` 메커니즘 사용
+  - Callback 함수가 `True` 반환 시 정상 종료 (scipy가 올바르게 처리)
+  - Evaluation counter는 유지, callback에서 limit 체크
+  - `differential_evolution(..., callback=callback)` 추가
+- **결과**: `maxiter=2, popsize=5` → 정확히 10회 평가 후 정상 종료 (RuntimeError 해결)
+
+**2025-01-XX: Optimization History 분석 기능 추가**
+- **기능**: `analyze_optimization_history()` 함수 추가
+  - Summary statistics (total evals, best/worst/mean/std objective)
+  - Best objective per generation (generation 단위 그룹화)
+  - Best parameters 출력
+  - Matplotlib convergence plot (optional)
+    - Left: All evaluations scatter plot
+    - Right: Best per generation line plot
+- **CLI**: `--analyze` mode 추가
+  - Usage: `python dev/generate_parameters.py --analyze --history path/to/history.csv`
+  - Unity 실행 없이 기존 결과 분석 가능
+- **목적**: 사용자가 optimization 진행 상황을 쉽게 파악
+
+**2025-01-XX: Baseline Objective 저장 및 자동 비교 기능**
+- **문제**: 하드코딩된 baseline (4.5932)으로는 다른 초기 파라미터 비교 불가
+- **해결**:
+  - `evaluate_objective.py`에 `save_baseline_objective()` 추가
+    - `--save-baseline` 옵션으로 baseline 저장
+    - `data/output/baseline_objective.json` 생성
+    - Objective, metrics, parameters, timestamp 저장
+  - `generate_parameters.py`에 `load_baseline_objective()` 추가
+    - 파일에서 baseline 자동 로드 (없으면 4.5932 fallback)
+    - Optimization 완료 시 baseline과 자동 비교
+    - `analyze_optimization_history()`에서 baseline 비교 섹션 추가
+    - Convergence plot에 baseline 수평선 표시 (빨간 점선)
+- **워크플로우**:
+  1. 최초 1회: `python dev/evaluate_objective.py --save-baseline`
+  2. 이후 optimization/분석: baseline 자동 참조
+- **장점**: 다양한 초기 조건 테스트 및 비교 가능
 
 ### 데이터 포맷 결정
 
@@ -380,11 +443,12 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 **Location**: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 
 **Calibration_hybrid_OutputManager.cs** (JSON Output Manager)
-- Caches SFM parameters from first spawned agent (prevents parameter loss when agents destroy)
+- Collects 18 SFM parameters directly from InputManager (single source of truth)
 - Collects error data from `ExtractError` component via reflection
 - Saves `simulation_result.json` to `StreamingAssets/Calibration/Output/`
 - Includes 18 SFM parameters, agent errors, and execution metadata
 - Auto-saves when simulation completes or Unity exits
+- Auto-stop Play mode option (`autoStopPlayMode`)
 
 **Calibration_hybrid_SimulationManager.cs** (Simulation Orchestrator)
 - Loads ATC trajectory CSV data (real pedestrian data)
@@ -473,13 +537,14 @@ D:\UnityProjects\META_VERYOLD_P01_s\
 ### Unity Calibration System
 **Location**: `D:\UnityProjects\META_VERYOLD_P01_s\Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 
-- **Calibration_hybrid_OutputManager.cs**: JSON output manager with parameter caching
+- **Calibration_hybrid_OutputManager.cs**: JSON output manager (reads from InputManager)
+- **Calibration_hybrid_InputManager.cs**: Parameter loading and validation
 - **Calibration_hybrid_SimulationManager.cs**: ATC trajectory loading, agent spawning, frame control
 - **Calibration_hybrid_SFM.cs**: 18-parameter Social Force Model implementation
 - **Calibration_hybrid_Empirical.cs**: Real trajectory playback
 - **Calibration_hybrid_ExtractError.cs**: Error calculation between empirical and validation trajectories
 - **Data Format Specification**: Confirmed JSON structure for Unity→Python communication
-- **Parameter Caching Fix**: Caches SFM parameters at simulation start to prevent loss when agents destroy
+- **Parameter Architecture**: InputManager as single source of truth (OutputManager reads from InputManager)
 
 ### Python Development Scripts
 **Location**: `c:\dev\calibration_hybrid\dev\`
@@ -496,7 +561,8 @@ D:\UnityProjects\META_VERYOLD_P01_s\
   - Baseline objective: 4.5932 (lower is better)
   - Verbose mode shows top 10 worst time-growth agents
   - Compare mode for multiple simulation results
-  - Usage: `python dev/evaluate_objective.py [--verbose] [--compare file1.json file2.json]`
+  - Baseline save mode: `--save-baseline` saves to `data/output/baseline_objective.json`
+  - Usage: `python dev/evaluate_objective.py [--verbose] [--compare file1.json file2.json] [--save-baseline]`
 
 - **export_to_unity.py**: Export Python parameters to Unity JSON format
   - Converts Python dict to Unity-compatible JSON
@@ -513,8 +579,13 @@ D:\UnityProjects\META_VERYOLD_P01_s\
   - Auto mode: Phase 4 (not yet implemented)
   - Optimization history tracking (CSV)
   - Best parameters auto-save
+  - Iteration counting bug fixed (exact `maxiter * popsize` evaluations)
+  - Analyze mode: analyze existing optimization history (--analyze)
+  - Baseline auto-load: loads from `data/output/baseline_objective.json` (fallback: 4.5932)
+  - Baseline comparison in optimization results and analysis
   - Usage: `python dev/generate_parameters.py --baseline`
-  - Usage: `python dev/generate_parameters.py --optimize --manual --maxiter 5 --popsize 10`
+  - Usage: `python dev/generate_parameters.py --optimize --manual --maxiter 1 --popsize 5`
+  - Usage: `python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv`
 
 ---
 
@@ -537,7 +608,7 @@ source .venv/bin/activate
 
 ### Unity Execution
 
-**Method 1: Unity Editor (Manual Testing)**
+**Method 1: Unity Editor (Manual Testing - Phase 3)**
 ```bash
 # 1. Open Unity project: D:\UnityProjects\META_VERYOLD_P01_s\
 # 2. Open Calibration scene
@@ -545,35 +616,10 @@ source .venv/bin/activate
 # 4. Check StreamingAssets/Calibration/Output/simulation_result.json
 ```
 
-**Method 2: Batch Mode (Python Automation)**
-```bash
-# From Python script, execute Unity in batch mode with parameters
-"C:\Program Files\Unity\Hub\Editor\<version>\Editor\Unity.exe" \
-  -quit \
-  -batchmode \
-  -projectPath "D:\UnityProjects\META_VERYOLD_P01_s" \
-  -executeMethod Calibration_ParameterInterface.ExecuteBatchModeSimulation \
-  -logFile "logs/unity_simulation.log" \
-  -parametermode \
-  -autoexit \
-  -parameterfile "exp_001_parameters.json" \
-  -resultfile "exp_001_result.json" \
-  -seed 42
-```
-
-**Command-line Arguments for ParameterInterface**
-- `-parametermode` - Enable parameter loading from JSON
-- `-autoexit` - Automatically exit Unity after simulation completes
-- `-parameterfile <filename>` - Specify parameter JSON filename (in Input folder)
-- `-resultfile <filename>` - Specify result JSON filename (in Output folder)
-- `-seed <int>` - Set random seed for reproducibility
-
-**Method 3: Editor Mode MenuItem (Legacy)**
-```bash
-# In Unity Editor menu bar:
-# Calibration > Legacy - Run Single Simulation
-# (Uses latest parameter file in Input folder)
-```
+**Method 2: Batch Mode (Python Automation - Phase 4, TBD)**
+- Unity batch mode 자동 실행은 Phase 4에서 구현 예정
+- `run_optimization.py`에서 subprocess로 Unity.exe 실행
+- 상세 커맨드 및 인자는 Phase 4 구현 시 문서화
 
 ---
 

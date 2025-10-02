@@ -43,10 +43,13 @@ Python (결과 평가 → 새 파라미터)
 
 - [x] Phase 1: 데이터 파이프라인 검증 (완료)
 - [x] Phase 2: Objective Function 구현 (완료 - Baseline: 4.5932)
-- [x] Phase 3: 최적화 알고리즘 연결 (완료 - 테스트 대기)
+- [x] Phase 3: 최적화 알고리즘 연결 (완료)
   - Scipy Differential Evolution
   - Manual mode (사용자가 Unity 수동 실행)
-- [ ] Phase 4: 자동화 (개발 예정)
+  - Iteration counting bug fixed (callback 방식으로 해결)
+  - Optimization history analysis feature added
+  - Baseline objective save/load/compare feature added
+- [ ] Phase 4: 자동화 (Phase 3 완료 후 개발 예정)
 
 ---
 
@@ -88,16 +91,35 @@ python dev/evaluate_objective.py
 # 출력: Baseline Objective = 4.5932
 ```
 
-### Step 3: 최적화 시작
+### Step 3: Baseline 저장 (최초 1회)
 ```bash
 # Baseline 파라미터 생성
 python dev/generate_parameters.py --baseline
+python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
 
-# 테스트 최적화 (2 iterations)
+# Unity 실행 (Play 버튼)
+
+# Baseline objective 저장
+python dev/evaluate_objective.py --save-baseline
+```
+
+→ `data/output/baseline_objective.json` 생성 (이후 자동 참조)
+
+### Step 4: 최적화 시작
+```bash
+# 테스트 최적화 (2 generation, 5 evaluations)
 python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
 ```
 
-각 iteration마다 Unity 수동 실행 필요 → Phase 4에서 자동화 예정
+각 evaluation마다 Unity 수동 실행 필요 → Baseline과 자동 비교
+
+### Step 5: 최적화 결과 분석
+```bash
+# Optimization history 분석
+python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
+```
+
+Convergence plot, baseline 비교, best parameters 출력
 
 ---
 
@@ -131,18 +153,33 @@ Baseline: 4.5932
 #### 기본 사용법
 
 ```bash
-# 1. Baseline 파라미터 생성
+# 0. Baseline 저장 (최초 1회만)
 python dev/generate_parameters.py --baseline
-
-# 2. Unity JSON 변환 (선택사항)
 python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
+# Unity Play 버튼 클릭
+python dev/evaluate_objective.py --save-baseline
+# → data/output/baseline_objective.json 생성
 
-# 3. 테스트 최적화 (2 iterations, ~10 evaluations)
+# 1. 테스트 최적화 (2 generation, 5 evaluations)
 python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+# → Baseline 자동 로드하여 비교
 
-# 4. 전체 최적화 (50 iterations, ~750 evaluations, 1-3일 소요)
+# 2. 결과 분석
+python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
+# → Baseline 비교 포함, convergence plot 생성
+
+# 3. 전체 최적화 (50 generations, 750 evaluations, 1-3일 소요)
 python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
 ```
+
+**Note**: `maxiter * popsize = total evaluations`
+- Example: `maxiter=2, popsize=5` → 10 Unity simulations
+- Example: `maxiter=50, popsize=15` → 750 Unity simulations
+
+**Baseline 관리**:
+- 최초 1회 `--save-baseline`으로 저장
+- 이후 모든 optimization/analysis에서 자동 참조
+- 다른 baseline 테스트 시 다시 `--save-baseline` 실행
 
 #### 최적화 실행 흐름 (Manual Mode)
 
@@ -156,8 +193,10 @@ python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
 
 #### 출력 파일
 
+- `data/output/baseline_objective.json` - Baseline objective (최초 1회 저장)
 - `data/output/optimization_history.csv` - 전체 평가 이력
 - `data/output/best_parameters.json` - 최고 성능 파라미터
+- `data/output/optimization_history.png` - Convergence plot with baseline (matplotlib 설치 시)
 
 ---
 
@@ -166,15 +205,21 @@ python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
 | 스크립트 | 용도 | 주요 옵션 |
 |---------|------|----------|
 | `load_simulation_results.py` | Unity 결과 로드 | `--verbose`, `--agent-id` |
-| `evaluate_objective.py` | Objective 계산 | `--verbose`, `--compare` |
+| `evaluate_objective.py` | Objective 계산 및 baseline 저장 | `--verbose`, `--compare`, `--save-baseline` |
 | `export_to_unity.py` | Python → Unity 변환 | `--input`, `--auto-id` |
-| `generate_parameters.py` | 파라미터 생성/최적화 | `--baseline`, `--optimize --manual` |
+| `generate_parameters.py` | 파라미터 생성/최적화/분석 | `--baseline`, `--optimize --manual`, `--analyze` |
 
 **자주 사용하는 커맨드**:
 ```bash
-python dev/evaluate_objective.py
+# Baseline 저장 (최초 1회)
+python dev/evaluate_objective.py --save-baseline
+
+# Optimization
 python dev/generate_parameters.py --baseline
-python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+python dev/generate_parameters.py --optimize --manual --maxiter 1 --popsize 5
+
+# Analysis
+python dev/generate_parameters.py --analyze
 ```
 
 ---
@@ -222,9 +267,15 @@ pip list  # 설치 확인
 ```
 
 **Optimization이 개선되지 않음**:
+- Optimization history 분석: `python dev/generate_parameters.py --analyze`
 - Local minimum 가능성: population size 증가 (`--popsize 20`)
 - 더 많은 generation: `--maxiter 100`
-- Optimization history 분석: `data/output/optimization_history.csv`
+- Convergence plot으로 추세 확인: `data/output/optimization_history.png`
+
+**RuntimeError: "func(x, *args) must return a scalar value"** (이미 수정됨):
+- 원인: Scipy differential_evolution이 StopIteration 예외를 잘못 처리
+- 해결: Callback 메커니즘으로 변경 (최신 버전에서 수정됨)
+- 조치: `git pull` 후 최신 코드 사용
 
 ---
 
