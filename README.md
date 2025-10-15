@@ -49,7 +49,11 @@ Python (결과 평가 → 새 파라미터)
   - Iteration counting bug fixed (callback 방식으로 해결)
   - Optimization history analysis feature added
   - Baseline objective save/load/compare feature added
-- [ ] Phase 4: 자동화 (Phase 3 완료 후 개발 예정)
+- [ ] Phase 4B: Optimizer Abstraction Layer (진행 중 - 테스트 단계)
+  - 모듈화된 최적화 시스템 구현 완료
+  - Unity Editor 자동화 기능 추가
+  - 알고리즘 교체 가능한 구조 (SCI 논문 대비)
+  - 현재: Unity automation 테스트 중 (TESTING.md 참조)
 
 ---
 

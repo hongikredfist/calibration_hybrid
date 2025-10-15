@@ -118,9 +118,9 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 ## Current Status
 
-**Phase**: Phase 3 Complete, Phase 4 Pending
-**Current File**: N/A (awaiting user decision)
-**Last Session**: Restructured CLAUDE.md to English with writing rules for better session continuity
+**Phase**: Phase 4B In Progress - Unity Automation Debugging
+**Current Task**: Testing Unity automation (TESTING.md Step 2)
+**Last Session**: Fixed AutomationController scene path issue (Calibration.unity → Calibration_Hybrid.unity)
 
 ### Completed
 
@@ -147,18 +147,33 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 - [x] **Bug fix**: Iteration counting (callback mechanism) - 2025-10-02
 - [x] Unity auto-stop Play mode after simulation
 
+#### Phase 4B: Optimizer Abstraction Layer ⏳ (In Progress)
+- [x] Architecture design (core/, optimizer/, analysis/ modules)
+- [x] `optimizer/base_optimizer.py` - Abstract interface for all algorithms
+- [x] `core/parameter_utils.py` - Parameter conversion utilities
+- [x] `core/unity_simulator.py` - Unity Editor automation (encapsulated)
+- [x] `core/objective_function.py` - Evaluation logic (reusable)
+- [x] `optimizer/scipy_de_optimizer.py` - Wrap existing Scipy DE code
+- [x] `run_optimization.py` - Unified CLI with algorithm selection
+- [x] `Calibration_hybrid_AutomationController.cs` - Unity Editor menu automation
+- [x] TESTING.md - Comprehensive test guide
+- [x] **Bug fix**: Scene path (Calibration → Calibration_Hybrid) - 2025-10-15
+
 ### Next
 
-#### Phase 4: Full Automation ⏳ (Pending)
-- [ ] `run_optimization.py` - Automated Unity batch mode execution
-  - [ ] Launch Unity via subprocess with batch mode flags
-  - [ ] Wait for simulation completion (timeout 10min)
-  - [ ] Load results and continue optimization loop
-  - [ ] Handle Unity crashes/errors gracefully
-  - [ ] Progress tracking with tqdm
-  - [ ] Checkpoint/resume capability
+#### Phase 4B: Testing & Validation (Current)
+- [ ] **CURRENT**: Test Unity automation (TESTING.md Step 2)
+  - Verify AutomationController loads Calibration_Hybrid scene correctly
+  - Verify Play mode starts/stops automatically
+  - Verify simulation_result.json created
+- [ ] Test Python → Unity integration (TESTING.md Step 3)
+- [ ] Test Objective Function wrapper (TESTING.md Step 4)
+- [ ] Test end-to-end optimization (TESTING.md Step 5: 10 evaluations)
+- [ ] Compare results with Phase 3 manual mode (validate no regression)
 
-**Blocker**: Waiting for user confirmation that Phase 3 manual testing is satisfactory before implementing automation.
+**Blocker**: Scene path confusion resolved. User testing Step 2 now.
+
+**Rationale**: SCI paper requires algorithm comparison experiments. Implementing abstraction now prevents costly refactoring later (8 hours now vs 20+ hours after Phase 4A).
 
 ---
 
@@ -174,73 +189,39 @@ source .venv/bin/activate           # Unix/Mac
 pip install -r requirements.txt
 ```
 
-### Baseline Setup (Run Once)
+### Phase 3: Manual Optimization
 ```bash
-# 1. Generate baseline parameters from Unity defaults
-python dev/generate_parameters.py --baseline
-
-# 2. Export to Unity JSON format
-python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
-
-# 3. Run Unity simulation manually
-# Open: D:\UnityProjects\META_VERYOLD_P01_s\
-# Load: Calibration.unity scene
-# Press Play button → Wait for simulation to complete and auto-stop
-
-# 4. Save baseline objective for future comparison
-python dev/evaluate_objective.py --save-baseline
-# Creates: data/output/baseline_objective.json
-```
-
-### Optimization Workflow (Phase 3 - Manual)
-```bash
-# Test run: 2 generations × 5 individuals = 10 Unity simulations
+# Test: 2 gens × 5 pop = 10 evaluations
 python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
 
-# Script will:
-# 1. Generate new parameters
-# 2. Export to Unity JSON
-# 3. Print: "Press ENTER after Unity simulation completes..."
-# 4. User manually runs Unity Play button
-# 5. User presses ENTER when done
-# 6. Script evaluates objective and continues
-
-# Production run: 50 generations × 15 individuals = 750 simulations (~1-3 days)
+# Production: 50 gens × 15 pop = 750 evaluations
 python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
-```
 
-### Analysis Commands
-```bash
-# Analyze optimization history with convergence plots
+# Analysis
 python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
-
-# Evaluate single simulation result
-python dev/evaluate_objective.py --verbose
-
-# Compare multiple results
-python dev/evaluate_objective.py --compare result1.json result2.json
-
-# Inspect simulation data
-python dev/load_simulation_results.py --verbose --agent-id 4236
 ```
 
-### File Paths Reference
+### Phase 4B: Automated Optimization (Testing)
+```bash
+# See dev/TESTING.md for 5-step test procedure
 
-**Unity Project**:
-- Project root: `D:\UnityProjects\META_VERYOLD_P01_s\`
-- Unity scripts: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
-- Parameter input: `Assets\StreamingAssets\Calibration\Input\*_parameters.json`
-- Result output: `Assets\StreamingAssets\Calibration\Output\simulation_result.json`
-- Trajectory data: `Assets\StreamingAssets\Data\PedestrianTrajectory\ATC\atc_resampled_1s_noQueing.csv`
+# Quick test (10 evals)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5 --seed 42
 
-**Python Workspace**:
-- Scripts: `c:\dev\calibration_hybrid\dev\`
-- Input (version control): `data/input/`
-- Output (results): `data/output/`
-  - `baseline_objective.json` - Auto-loaded by optimization/analysis
-  - `optimization_history.csv` - Full evaluation log
-  - `best_parameters.json` - Best parameters found so far
-  - `optimization_history.png` - Convergence plot with baseline
+# Production (750 evals, ~3 days)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+```
+
+### Key Paths
+
+**Unity**: `D:\UnityProjects\META_VERYOLD_P01_s\`
+- Scripts: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
+- Scene: `Assets\VeryOld_P01_s\Scene\PedModel\Calibration_Hybrid.unity`
+- Input: `Assets\StreamingAssets\Calibration\Input\*_parameters.json`
+- Output: `Assets\StreamingAssets\Calibration\Output\simulation_result.json`
+
+**Python**: `c:\dev\calibration_hybrid\dev\`
+- Results: `data/output/` (baseline_objective.json, optimization_history.csv, best_parameters.json)
 
 ---
 
@@ -403,6 +384,38 @@ scipy.optimize.differential_evolution(
 
 ## Development History
 
+### 2025-10-15: AutomationController Scene Path Fix
+
+**Problem**:
+- User ran `Automation → Test - Run Simulation (Manual)` menu in Unity
+- Unity loaded wrong scene: `Calibration.unity` (old system with `Calibration_ParameterInterface`)
+- Should load: `Calibration_Hybrid.unity` (Phase 3 system with `Calibration_hybrid_*` scripts)
+- Error: `[ParameterInterface] Instance CalibrationManager - Specific file not found: parameters.json`
+- Root cause: Two parallel calibration systems exist in project
+
+**Context**:
+- **Old system** (`Assets/VeryOld_P01_s/Dev/Calibration/`): Uses `Calibration_ParameterInterface.cs`, different parameter loading mechanism
+- **Phase 3+ system** (`Assets/VeryOld_P01_s/Dev/Calibration_hybrid/`): Uses `Calibration_hybrid_InputManager.cs`, designed for Python integration
+- `AutomationController.cs` had hardcoded path: `"Assets/Scenes/Calibration.unity"` (wrong scene)
+
+**Solution**:
+1. Updated `CALIBRATION_SCENE_PATH` in `Calibration_hybrid_AutomationController.cs` (line 22):
+   ```csharp
+   // Before: "Assets/Scenes/Calibration.unity"
+   // After:  "Assets/VeryOld_P01_s/Scene/PedModel/Calibration_Hybrid.unity"
+   ```
+2. Updated `SCENE_NAME_PATTERNS` to prioritize "Calibration_Hybrid" over "Calibration"
+3. Added comments distinguishing Phase 3+ system from old system
+4. Updated TESTING.md with scene name clarification and troubleshooting section
+
+**Discovery**: Found actual scene path using file system search:
+```bash
+find "D:\UnityProjects\META_VERYOLD_P01_s" -name "*Calibration_Hybrid*.unity"
+# Result: Assets/VeryOld_P01_s/Scene/PedModel/Calibration_Hybrid.unity
+```
+
+**Impact**: AutomationController now loads correct scene, no more ParameterInterface errors. Phase 4B automation uses same system as Phase 3 manual workflow.
+
 ### 2025-10-02: Scipy DE Iteration Counting Bug Fix
 
 **Problem**:
@@ -484,146 +497,96 @@ python dev/generate_parameters.py --analyze --history data/output/optimization_h
 
 **Impact**: Visual convergence monitoring, detect stagnation, identify local minima
 
-### 2025-09-30: Chose Scipy DE over TuRBO/AxPlatform
 
-**Context**: Selecting optimization algorithm for 18-parameter black-box calibration
+### 2025-10-15: Phase 4B Decision and Implementation
 
-**Options Considered**:
-1. **TuRBO** (Trust Region Bayesian Optimization)
-   - Pros: State-of-the-art for high-dim (50-1000D)
-   - Cons: Complex setup, designed for 50+ dimensions, requires tuning
-2. **Ax Platform** (Adaptive Experimentation)
-   - Pros: Multi-objective, parallel evaluations, enterprise features
-   - Cons: Heavy framework, overkill for 18D single-objective
-3. **Scipy DE** (Differential Evolution)
-   - Pros: Simple, robust, optimal for 10-40D, no gradients needed
-   - Cons: Not cutting-edge, slower than gradient methods (not applicable here)
+**Context**: Preparing for SCI paper requiring algorithm comparison experiments
 
-**Decision**: Scipy Differential Evolution
+**Decision**: Implement Phase 4B (Optimizer Abstraction) before Phase 4A (direct automation)
 
 **Rationale**:
-- 18D is in DE's sweet spot (TuRBO overkill)
-- Unity simulation is black-box → gradient-free required
-- 3-4 hyperparameters vs 15+ for TuRBO
-- 30 years of validation in literature
-- Aligns with project philosophy: simplicity, manual verification at each phase
+- SCI papers require comparative analysis of multiple optimization algorithms
+- Refactoring after Phase 4A would be 2-3x more difficult (codebase + results coupling)
+- Abstraction enables algorithm addition in 1-2 hours vs days of refactoring
+- Single responsibility principle: Unity execution, optimization, evaluation separated
+- Current code tightly coupled to Scipy DE (line 8, 296-310 in generate_parameters.py)
 
-**Configuration**: `popsize=15, maxiter=50, strategy='best1bin'` → 750 evaluations
+**Architecture Implemented**:
+```
+dev/
+├─ run_optimization.py              # Unified CLI (algorithm-agnostic)
+├─ core/
+│   ├─ unity_simulator.py           # Unity Editor automation via -executeMethod
+│   ├─ objective_function.py        # Evaluation logic wrapper
+│   └─ parameter_utils.py           # Bounds, conversion utilities
+├─ optimizer/
+│   ├─ base_optimizer.py            # Abstract interface
+│   └─ scipy_de_optimizer.py        # Scipy DE implementation
+└─ Unity:
+    └─ Calibration_hybrid_AutomationController.cs  # Editor menu automation
+```
 
-### 2025-09-29: Unity Auto-Stop Play Mode
+**Key Components Created**:
+1. **BaseOptimizer** abstract class with `optimize() -> OptimizerResult` interface
+2. **UnitySimulator** encapsulates Editor automation (subprocess, polling, timeout)
+3. **ObjectiveFunction** wraps Unity execution + evaluation in callable
+4. **ScipyDEOptimizer** wraps existing DE logic from Phase 3
+5. **AutomationController** Unity Editor MenuItem for testing
+6. **TESTING.md** comprehensive 5-step test guide
 
-**Problem**: Manual optimization workflow required user to stop Unity Play mode after each simulation
+**Impact**:
+- Algorithm switching: Change `--algorithm scipy_de` CLI flag only
+- Future additions: Bayesian, CMA-ES, PSO in 1-2 hours each
+- Code reusability: 95% of Unity/evaluation logic shared across algorithms
+- Time investment: 8 hours implementation + testing
+- **Status**: Implementation complete, testing in progress (Step 2/5)
 
-**Solution**:
-- Added `autoStopPlayMode` boolean flag to `Calibration_hybrid_OutputManager.cs`
-- After saving simulation_result.json, automatically exit Play mode
-- Editor mode: `EditorApplication.isPlaying = false`
-- Build mode: `Application.Quit()`
-
-**Impact**: Reduced manual steps in Phase 3 workflow (user only needs to press Play, not Stop)
-
-### 2025-09-29: Unity InputManager Architecture
-
-**Decision**: Create `Calibration_hybrid_InputManager.cs` as single source of truth for parameters
-
-**Architecture**:
-- InputManager loads parameters JSON at scene start
-- Validates and clamps all 18 parameters to bounds
-- Provides public static accessors for parameter values
-- OutputManager reads parameters from InputManager (not SFM instances)
-- SFM instances read parameters from InputManager in Start()
-
-**Rationale**:
-- Previous approach: OutputManager queried SFM instances via reflection (fragile)
-- Problem: Agents destroyed before OutputManager could collect parameters
-- Solution: Centralized parameter storage independent of agent lifecycle
-
-**Impact**: Robust parameter tracking, eliminates race conditions
+**Files Created** (2025-10-15):
+- `dev/core/parameter_utils.py` (100 lines)
+- `dev/core/unity_simulator.py` (300 lines)
+- `dev/core/objective_function.py` (150 lines)
+- `dev/optimizer/base_optimizer.py` (150 lines)
+- `dev/optimizer/scipy_de_optimizer.py` (250 lines)
+- `dev/run_optimization.py` (150 lines)
+- `D:\UnityProjects\...\Calibration_hybrid_AutomationController.cs` (175 lines)
+- `dev/TESTING.md` (consolidated test guide)
 
 ---
 
 ## Next Steps
 
-### Immediate Task: Phase 4 Automation
+### Immediate Task: Phase 4B Testing (TESTING.md Step 2)
 
-**Goal**: Implement fully automated optimization loop without user intervention
+**Goal**: Validate Unity automation works correctly with Calibration_Hybrid scene
 
-**Status**: **BLOCKED** - Awaiting user confirmation that Phase 3 manual testing is complete and satisfactory
+**Status**: **BLOCKED - USER TESTING** - Waiting for user to test Step 2 in Unity
 
-**When Unblocked**:
+**Current Test**: TESTING.md Step 2 - Test Unity Automation (10 min)
+1. Unity Editor → Menu → "Automation → Test - Run Simulation (Manual)"
+2. Verify scene loaded: **Calibration_Hybrid** (not Calibration)
+3. Verify Play mode starts automatically
+4. Wait for simulation (~5-10 min)
+5. Verify Play mode stops automatically
+6. Check file exists: `Assets/StreamingAssets/Calibration/Output/simulation_result.json`
 
-**File to Create**: `dev/run_optimization.py`
+**Expected Result**: ✅ Unity automation works (Calibration_Hybrid scene loads, Play starts/stops automatically)
 
-**Requirements**:
-1. Launch Unity in batch mode via subprocess
-   - Command: `Unity.exe -batchmode -nographics -quit -executeMethod [method] -logFile -`
-   - Requires Unity C# method to load scene and start simulation
-2. Wait for simulation completion
-   - Poll for simulation_result.json file creation
-   - Timeout: 10 minutes per simulation
-   - Handle Unity crashes (check process exit code)
-3. Load results and evaluate objective
-   - Reuse `evaluate_objective.py` functions
-4. Feed objective back to Differential Evolution
-   - Same callback mechanism as manual mode
-5. Progress tracking
-   - tqdm progress bar showing current iteration/total
-   - ETA calculation
-6. Checkpoint/resume
-   - Save optimization state after each evaluation
-   - Resume from checkpoint if interrupted
+**Potential Issues**:
+- If Unity exits: Scene path incorrect (see TESTING.md troubleshooting)
+- If wrong scene loads: Update AutomationController.cs line 22
+- If simulation doesn't stop: Check OutputManager `autoStopPlayMode` enabled
 
-**Acceptance Criteria**:
-```bash
-python dev/run_optimization.py --maxiter 2 --popsize 5
-# Should run 10 Unity simulations without user intervention
-# Should display progress bar
-# Should handle Unity crashes gracefully
-# Should save optimization history and best parameters
-```
+**Remaining Tests** (after Step 2):
+- [ ] Step 3: Python → Unity integration (unity_simulator.py)
+- [ ] Step 4: Objective Function wrapper
+- [ ] Step 5: End-to-end optimization (10 evaluations)
+- [ ] Compare results with Phase 3 manual mode
 
-**Technical Challenges**:
-- Unity batch mode execution on Windows (path handling, arguments)
-- Unity error detection (parse log file for exceptions)
-- Process timeout and cleanup (kill Unity if frozen)
-- Checkpoint serialization (pickle Scipy DE state)
-
-**Estimated Effort**: 4-6 hours implementation + 2-3 hours testing
+**After Phase 4B**: Production optimization (750 evals), algorithm comparison (Bayesian/CMA-ES), SCI paper
 
 ---
 
 ## Development Philosophy
 
-### DO
-- Write standalone, independently executable scripts
-- Enable manual verification at each step before automation
-- Keep code simple and function-oriented (not complex classes)
-- Document architectural decisions with rationale
-- Build incrementally: Phase 1 → 2 → 3 → 4
-
-### DON'T
-- Create complex class hierarchies unnecessarily
-- Attempt full automation before manual verification works
-- Add features not explicitly needed
-- Use emojis in code (OK in .md files)
-- Increase code volume without clear benefit
-
-### Code Style
-- Each script runnable independently via `if __name__ == '__main__'`
-- argparse for command-line arguments
-- Docstrings with brief usage examples
-- Function-oriented over class-oriented
-- English comments and variable names
-
----
-
-## Testing Strategy
-
-No automated unit tests currently. Manual verification workflow:
-
-**Phase 1 Test**: Load sample Unity JSON, print statistics
-**Phase 2 Test**: Evaluate multiple result files, compare objectives
-**Phase 3 Test**: Run 1-2 optimization iterations manually, verify history
-**Phase 4 Test**: Run automated optimization for 10 evaluations, verify results match manual mode
-
-**Future**: Consider pytest for data loading/validation functions (low priority)
+**DO**: Standalone scripts, manual verification first, simple functions, incremental phases
+**DON'T**: Complex classes, premature automation, unnecessary features, emojis in code
