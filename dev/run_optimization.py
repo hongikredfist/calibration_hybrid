@@ -26,8 +26,8 @@ sys.path.append(str(Path(__file__).parent))
 from core.unity_simulator import UnitySimulator
 from core.objective_function import ObjectiveFunction
 from core.parameter_utils import load_parameter_bounds, params_array_to_dict
+from core.history_tracker import OptimizationHistory
 from optimizer.scipy_de_optimizer import ScipyDEOptimizer
-from generate_parameters import OptimizationHistory
 
 
 def create_optimizer(args, bounds, objective_function):
@@ -171,8 +171,12 @@ Examples:
 
     # Print configuration
     print("=" * 80)
-    print("PARAMETER CALIBRATION - AUTOMATED OPTIMIZATION")
+    print("PARAMETER CALIBRATION - AUTOMATED OPTIMIZATION (FILE TRIGGER MODE)")
     print("=" * 80)
+    print()
+    print("IMPORTANT: Unity Editor must be open with the project loaded!")
+    print("Project: D:\\UnityProjects\\META_VERYOLD_P01_s")
+    print()
     print(f"Algorithm:       {args.algorithm}")
     print(f"Max Evaluations: {args.max_evals}")
     print(f"Random Seed:     {args.seed}")
@@ -192,9 +196,10 @@ Examples:
     estimated_time = args.max_evals * 7 / 60  # 7 minutes per eval average
     print(f"Estimated time: {estimated_time:.1f} hours ({estimated_time/24:.1f} days)")
     print(f"This will run {args.max_evals} Unity simulations automatically.")
+    print(f"Unity Editor will remain open during optimization.")
     print()
 
-    response = input("Continue? [y/N]: ").strip().lower()
+    response = input("Continue? [y/n]: ").strip().lower()
     if response != 'y':
         print("Cancelled.")
         return
@@ -205,16 +210,28 @@ Examples:
     bounds = load_parameter_bounds()
     print(f"Loaded {len(bounds)} parameter bounds")
 
+    # Use file trigger mode (Unity Editor must be open)
     unity_sim = UnitySimulator(
         unity_editor_path=args.unity_path,
         project_path=args.project_path,
-        timeout=args.timeout
+        timeout=args.timeout,
+        use_file_trigger=True
     )
 
-    # Create history tracker
+    # Create history tracker with unique filename
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    history_path = output_dir / "optimization_history.csv"
+
+    # Generate unique history filename: optimization_history_{algorithm}_{timestamp}.csv
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.algorithm == 'scipy_de':
+        algorithm_name = f"ScipyDE_pop{args.popsize}_{args.strategy}"
+    else:
+        algorithm_name = args.algorithm
+
+    history_filename = f"optimization_history_{algorithm_name}_{timestamp}.csv"
+    history_path = output_dir / history_filename
+
     history = OptimizationHistory(str(history_path))
     print(f"History tracking: {history_path}")
     print()
@@ -243,6 +260,18 @@ Examples:
             json.dump(best_params_dict, f, indent=2)
         print(f"Best parameters saved: {best_params_file}")
 
+        # Automatic analysis and convergence plot
+        print("\n" + "=" * 80)
+        print("GENERATING ANALYSIS AND CONVERGENCE PLOT")
+        print("=" * 80)
+        from analysis.analyze_history import analyze_optimization_history
+        try:
+            analyze_optimization_history(str(history_path))
+        except Exception as e:
+            print(f"Warning: Analysis failed: {e}")
+            print("You can manually analyze with:")
+            print(f"  python dev/analysis/analyze_history.py {history_path}")
+
         # Print summary
         print("\n" + "=" * 80)
         print("OPTIMIZATION SUMMARY")
@@ -257,6 +286,12 @@ Examples:
         print(f"  - Results:      {result_file}")
         print(f"  - Best params:  {best_params_file}")
         print(f"  - History:      {history_path}")
+
+        # Check if plot was created (same stem as CSV, different extension)
+        plot_file = history_path.with_suffix('.png')
+        if plot_file.exists():
+            print(f"  - Plot:         {plot_file}")
+
         print("=" * 80)
 
     except KeyboardInterrupt:

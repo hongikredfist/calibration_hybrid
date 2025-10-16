@@ -166,8 +166,14 @@ def test_objective_function():
     Unity simulation → Result loading → Objective evaluation
     """
     print("="*80)
-    print("OBJECTIVE FUNCTION TEST")
+    print("OBJECTIVE FUNCTION TEST (FILE TRIGGER MODE)")
     print("="*80)
+    print()
+    print("IMPORTANT: Unity Editor must be open with the project loaded!")
+    print("Project: D:\\UnityProjects\\META_VERYOLD_P01_s")
+    print()
+    input("Press ENTER when Unity Editor is ready...")
+    print()
 
     # Import utilities
     from core.parameter_utils import get_baseline_parameters, params_dict_to_array
@@ -180,8 +186,8 @@ def test_objective_function():
     print(f"Testing with baseline parameters")
     print(f"Expected objective: ~4.59 (baseline)")
 
-    # Create simulator and objective function
-    simulator = UnitySimulator(timeout=600)
+    # Create simulator and objective function (FILE TRIGGER MODE)
+    simulator = UnitySimulator(timeout=600, use_file_trigger=True)
     obj_func = ObjectiveFunction(simulator, verbose=True)
 
     # Evaluate
@@ -199,8 +205,16 @@ def test_objective_function():
         print(f"  - Objective: {best['objective']:.4f}")
         print(f"  - Experiment ID: {best['experiment_id']}")
 
+        # Verify objective is reasonable
+        if abs(objective - 4.59) > 1.0:
+            print(f"\n[TEST] WARNING: Objective {objective:.4f} differs significantly from expected ~4.59")
+        else:
+            print(f"\n[TEST] Objective is within expected range!")
+
     except Exception as e:
         print(f"\n[TEST] FAILED: {e}")
+        import traceback
+        traceback.print_exc()
         raise
 
     finally:

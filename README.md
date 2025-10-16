@@ -43,17 +43,17 @@ Python (결과 평가 → 새 파라미터)
 
 - [x] Phase 1: 데이터 파이프라인 검증 (완료)
 - [x] Phase 2: Objective Function 구현 (완료 - Baseline: 4.5932)
-- [x] Phase 3: 최적화 알고리즘 연결 (완료)
-  - Scipy Differential Evolution
-  - Manual mode (사용자가 Unity 수동 실행)
-  - Iteration counting bug fixed (callback 방식으로 해결)
-  - Optimization history analysis feature added
-  - Baseline objective save/load/compare feature added
-- [ ] Phase 4B: Optimizer Abstraction Layer (진행 중 - 테스트 단계)
-  - 모듈화된 최적화 시스템 구현 완료
-  - Unity Editor 자동화 기능 추가
-  - 알고리즘 교체 가능한 구조 (SCI 논문 대비)
-  - 현재: Unity automation 테스트 중 (TESTING.md 참조)
+- [x] Phase 3: 최적화 알고리즘 연결 (완료 - 아카이브됨)
+- [x] **Phase 4B: Optimizer Abstraction Layer (완료 - 2025-10-16)**
+  - ✅ 모듈화된 최적화 시스템 (core/, optimizer/, analysis/)
+  - ✅ Unity Editor 완전 자동화 (파일 트리거 시스템)
+  - ✅ 알고리즘 교체 가능한 구조 (SCI 논문 대비)
+  - ✅ Input-Output 1:1 매칭 (완전한 추적 가능성)
+  - ✅ 유니크 히스토리 파일 (실험 비교 용이)
+  - ✅ 자동 분석 및 그래프 생성
+  - ✅ 테스트 완료 (TESTING.md 5단계 검증)
+
+**상태**: 프로덕션 최적화 준비 완료 (750 evaluations, ~3일 소요)
 
 ---
 
@@ -74,72 +74,87 @@ pip install -r requirements.txt
 
 ---
 
-## 빠른 시작
+## 빠른 시작 (Phase 4B - 완전 자동화)
 
-### Step 1: 환경 설정 및 Unity 실행
+### Step 1: 환경 설정
 ```bash
 # Python 환경 준비
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Unity에서 Calibration scene 실행 → 시뮬레이션 완료 대기 (5-10분)
+### Step 2: Unity Editor 실행
+- Unity 프로젝트 열기: `D:\UnityProjects\META_VERYOLD_P01_s\`
+- Scene 로드: `Calibration_Hybrid.unity`
+- **Unity Editor를 그대로 둔 채로 다음 단계 진행** (자동화됨)
 
-### Step 2: 결과 분석
+### Step 3: 자동 최적화 실행
 ```bash
-# Unity 결과 확인
-python dev/load_simulation_results.py
+# 테스트 실행 (10 evaluations, ~1시간)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
 
-# Objective 평가
-python dev/evaluate_objective.py
-# 출력: Baseline Objective = 4.5932
+# 프로덕션 실행 (750 evaluations, ~3일)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
 ```
 
-### Step 3: Baseline 저장 (최초 1회)
-```bash
-# Baseline 파라미터 생성
-python dev/generate_parameters.py --baseline
-python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
+**자동으로 실행됨**:
+- Python이 파라미터 생성
+- Unity가 자동으로 시뮬레이션 실행 (파일 트리거 방식)
+- 결과 자동 평가 및 다음 파라미터 생성
+- 최적화 완료 후 convergence plot 자동 생성
 
-# Unity 실행 (Play 버튼)
-
-# Baseline objective 저장
-python dev/evaluate_objective.py --save-baseline
-```
-
-→ `data/output/baseline_objective.json` 생성 (이후 자동 참조)
-
-### Step 4: 최적화 시작
-```bash
-# 테스트 최적화 (2 generation, 5 evaluations)
-python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
-```
-
-각 evaluation마다 Unity 수동 실행 필요 → Baseline과 자동 비교
-
-### Step 5: 최적화 결과 분석
-```bash
-# Optimization history 분석
-python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
-```
-
-Convergence plot, baseline 비교, best parameters 출력
+### Step 4: 결과 확인
+최적화 완료 후 자동 생성된 파일들:
+- `data/output/best_parameters.json` - 최적 파라미터
+- `data/output/optimization_history_*.csv` - 최적화 히스토리
+- `data/output/optimization_history_*.png` - 수렴 그래프
+- `data/output/result_*.json` - 전체 결과
 
 ---
 
 ## 상세 사용법
 
-### Phase 1-2: 데이터 검증 및 평가
+### Phase 4B: 자동 최적화 (메인 사용법)
+
+**Optimization Algorithm**: Scipy Differential Evolution (population-based, gradient-free)
+
+#### 완전 자동화 모드 (권장)
+```bash
+# Unity Editor 열어둔 상태에서 실행
+python dev/run_optimization.py --algorithm scipy_de --max-evals 100 --popsize 10
+
+# 고급 옵션
+python dev/run_optimization.py \
+  --algorithm scipy_de \
+  --max-evals 750 \
+  --popsize 15 \
+  --strategy best1bin \
+  --seed 42 \
+  --timeout 1200
+```
+
+**옵션 설명**:
+- `--max-evals`: 총 시뮬레이션 실행 횟수
+- `--popsize`: 세대당 개체 수 (큰 값 = 더 넓은 탐색)
+- `--strategy`: 진화 전략 (best1bin, rand1bin 등)
+- `--seed`: 재현성을 위한 랜덤 시드
+- `--timeout`: 시뮬레이션당 최대 대기 시간 (초)
+
+**자동 생성 파일**:
+- `optimization_history_ScipyDE_pop15_best1bin_20251016_163602.csv` - 유니크 히스토리
+- `optimization_history_ScipyDE_pop15_best1bin_20251016_163602.png` - 수렴 그래프
+- `result_ScipyDE_pop15_best1bin_20251016_163602.json` - 메타데이터
+- `best_parameters.json` - 최적 파라미터
+
+### 유틸리티: 데이터 검증 및 평가
 
 ```bash
-# 기본 로드 및 분석
+# Unity 결과 확인
 python dev/load_simulation_results.py
+python dev/load_simulation_results.py --verbose --agent-id 4236
 
 # Objective 평가
 python dev/evaluate_objective.py
-
-# 상세 옵션
-python dev/load_simulation_results.py --verbose --agent-id 4236
 python dev/evaluate_objective.py --verbose
 python dev/evaluate_objective.py --compare result1.json result2.json
 ```
@@ -150,80 +165,43 @@ Objective = 0.50 * MeanError + 0.30 * Percentile95 + 0.20 * TimeGrowth
 Baseline: 4.5932
 ```
 
-### Phase 3: 파라미터 최적화
+### 아카이브: Phase 3 수동 모드
 
-**Optimization Algorithm**: Scipy Differential Evolution (population-based, gradient-free)
-
-#### 기본 사용법
+Phase 3의 수동 최적화 모드는 `archive/phase3/`로 이동되었습니다.
+필요시 다음과 같이 사용 가능:
 
 ```bash
-# 0. Baseline 저장 (최초 1회만)
-python dev/generate_parameters.py --baseline
-python dev/export_to_unity.py --input data/input/baseline_parameters.json --auto-id
-# Unity Play 버튼 클릭
-python dev/evaluate_objective.py --save-baseline
-# → data/output/baseline_objective.json 생성
+# Phase 3 수동 모드 (아카이브됨)
+python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
+# 각 evaluation마다 Unity Play 버튼 수동 클릭 필요
 
-# 1. 테스트 최적화 (2 generation, 5 evaluations)
-python dev/generate_parameters.py --optimize --manual --maxiter 2 --popsize 5
-# → Baseline 자동 로드하여 비교
-
-# 2. 결과 분석
-python dev/generate_parameters.py --analyze --history data/output/optimization_history.csv
-# → Baseline 비교 포함, convergence plot 생성
-
-# 3. 전체 최적화 (50 generations, 750 evaluations, 1-3일 소요)
-python dev/generate_parameters.py --optimize --manual --maxiter 50 --popsize 15
+# 상세 내용은 archive/phase3/README.md 참조
 ```
-
-**Note**: `maxiter * popsize = total evaluations`
-- Example: `maxiter=2, popsize=5` → 10 Unity simulations
-- Example: `maxiter=50, popsize=15` → 750 Unity simulations
-
-**Baseline 관리**:
-- 최초 1회 `--save-baseline`으로 저장
-- 이후 모든 optimization/analysis에서 자동 참조
-- 다른 baseline 테스트 시 다시 `--save-baseline` 실행
-
-#### 최적화 실행 흐름 (Manual Mode)
-
-1. Python이 새 파라미터 생성 → Unity JSON 저장
-2. 화면에 "Press ENTER after Unity simulation completes..." 표시
-3. **사용자가 Unity Play 버튼 클릭 → 시뮬레이션 실행 (수동)**
-4. 시뮬레이션 완료 후 Python 콘솔에서 ENTER
-5. Python이 결과 로드 → Objective 계산
-6. Differential Evolution이 다음 파라미터 생성
-7. 반복...
-
-#### 출력 파일
-
-- `data/output/baseline_objective.json` - Baseline objective (최초 1회 저장)
-- `data/output/optimization_history.csv` - 전체 평가 이력
-- `data/output/best_parameters.json` - 최고 성능 파라미터
-- `data/output/optimization_history.png` - Convergence plot with baseline (matplotlib 설치 시)
 
 ---
 
 ## Quick Reference
 
+**메인 스크립트**:
 | 스크립트 | 용도 | 주요 옵션 |
 |---------|------|----------|
-| `load_simulation_results.py` | Unity 결과 로드 | `--verbose`, `--agent-id` |
-| `evaluate_objective.py` | Objective 계산 및 baseline 저장 | `--verbose`, `--compare`, `--save-baseline` |
-| `export_to_unity.py` | Python → Unity 변환 | `--input`, `--auto-id` |
-| `generate_parameters.py` | 파라미터 생성/최적화/분석 | `--baseline`, `--optimize --manual`, `--analyze` |
+| `run_optimization.py` | **자동 최적화 (메인)** | `--algorithm scipy_de`, `--max-evals`, `--popsize`, `--seed` |
+| `load_simulation_results.py` | Unity 결과 확인 | `--verbose`, `--agent-id` |
+| `evaluate_objective.py` | Objective 계산 | `--verbose`, `--compare` |
 
 **자주 사용하는 커맨드**:
 ```bash
-# Baseline 저장 (최초 1회)
-python dev/evaluate_objective.py --save-baseline
+# 테스트 최적화 (10 evaluations, ~1시간)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
 
-# Optimization
-python dev/generate_parameters.py --baseline
-python dev/generate_parameters.py --optimize --manual --maxiter 1 --popsize 5
+# 프로덕션 최적화 (750 evaluations, ~3일)
+python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
 
-# Analysis
-python dev/generate_parameters.py --analyze
+# Unity 결과 확인
+python dev/load_simulation_results.py --verbose
+
+# Objective 평가
+python dev/evaluate_objective.py
 ```
 
 ---
@@ -233,13 +211,26 @@ python dev/generate_parameters.py --analyze
 ```
 calibration_hybrid/
 ├── data/
-│   ├── input/              # Python → Unity 파라미터
-│   └── output/             # Unity → Python 결과
+│   ├── input/              # [생성됨] Python → Unity 파라미터
+│   └── output/             # [생성됨] Unity → Python 결과, 히스토리, 그래프
 ├── dev/                    # Python 스크립트
-│   ├── load_simulation_results.py
-│   ├── evaluate_objective.py
-│   ├── export_to_unity.py
-│   └── generate_parameters.py
+│   ├── run_optimization.py              # 메인 실행 파일
+│   ├── core/                             # 핵심 모듈
+│   │   ├── unity_simulator.py           # Unity 자동화
+│   │   ├── objective_function.py        # 평가 함수
+│   │   ├── parameter_utils.py           # 파라미터 유틸리티
+│   │   └── history_tracker.py           # 히스토리 추적
+│   ├── optimizer/                        # 최적화 알고리즘
+│   │   ├── base_optimizer.py            # 추상 인터페이스
+│   │   └── scipy_de_optimizer.py        # Scipy DE 구현
+│   ├── analysis/                         # 결과 분석
+│   │   └── analyze_history.py           # 수렴 그래프 생성
+│   ├── evaluate_objective.py             # Objective 계산 유틸
+│   ├── export_to_unity.py                # Python → Unity 변환
+│   ├── load_simulation_results.py        # Unity 결과 로드
+│   └── TESTING.md                        # 테스트 가이드
+├── archive/
+│   └── phase3/                           # Phase 3 수동 모드 (아카이브)
 ├── requirements.txt
 ├── README.md               # 사용법 (이 파일)
 └── CLAUDE.md               # 개발자 가이드
@@ -270,16 +261,19 @@ pip install -r requirements.txt
 pip list  # 설치 확인
 ```
 
-**Optimization이 개선되지 않음**:
-- Optimization history 분석: `python dev/generate_parameters.py --analyze`
-- Local minimum 가능성: population size 증가 (`--popsize 20`)
-- 더 많은 generation: `--maxiter 100`
-- Convergence plot으로 추세 확인: `data/output/optimization_history.png`
+**Unity Editor가 자동 실행되지 않음**:
+- Unity Editor가 열려 있는지 확인
+- `Calibration_Hybrid.unity` scene이 로드되어 있는지 확인
+- 콘솔에서 `[AutomationController] File trigger system initialized` 메시지 확인
 
-**RuntimeError: "func(x, *args) must return a scalar value"** (이미 수정됨):
-- 원인: Scipy differential_evolution이 StopIteration 예외를 잘못 처리
-- 해결: Callback 메커니즘으로 변경 (최신 버전에서 수정됨)
-- 조치: `git pull` 후 최신 코드 사용
+**Optimization이 개선되지 않음**:
+- Convergence plot 확인: `data/output/optimization_history_*.png`
+- Local minimum 가능성: population size 증가 (`--popsize 20`)
+- 더 많은 evaluations: `--max-evals 1000`
+
+**시뮬레이션이 중간에 멈춤**:
+- Unity 콘솔에서 에러 메시지 확인
+- Timeout 증가: `--timeout 1200` (기본 600초 → 1200초)
 
 ---
 

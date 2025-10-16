@@ -114,13 +114,21 @@ class ScipyDEOptimizer(BaseOptimizer):
         eval_counter = [0]
         termination_flag = [False]
 
-        # Objective function wrapper (counts evaluations)
+        # Objective function wrapper (counts evaluations and enforces limit)
         def objective_wrapper(params):
             eval_counter[0] += 1
             self.eval_count = eval_counter[0]
+
+            # Check if limit exceeded BEFORE running evaluation
+            if eval_counter[0] > self.max_evaluations:
+                print(f"\n[Optimizer] Evaluation limit reached ({self.max_evaluations}), skipping eval {eval_counter[0]}")
+                termination_flag[0] = True
+                # Return large penalty to signal termination
+                return 1e10
+
             return self.objective_function(params)
 
-        # Callback to enforce evaluation limit
+        # Callback to enforce evaluation limit (called after each generation)
         def callback(xk, convergence):
             """
             Callback called after each generation.
@@ -133,6 +141,7 @@ class ScipyDEOptimizer(BaseOptimizer):
                 True to stop optimization, False to continue
             """
             if eval_counter[0] >= self.max_evaluations:
+                print(f"\n[Optimizer] Stopping optimization: {eval_counter[0]} evaluations completed")
                 termination_flag[0] = True
                 return True  # Stop optimization
             return False  # Continue

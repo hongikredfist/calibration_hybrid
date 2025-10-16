@@ -1,8 +1,19 @@
 """
 Unity Editor simulator for automated parameter calibration.
 
+Supports TWO modes:
+1. Subprocess mode: Launch new Unity instance (unity_editor_path provided)
+2. File trigger mode: Use already-running Unity Editor (default, recommended)
+
+Mode 2 (File Trigger) advantages:
+- Faster (no Unity startup overhead ~30s)
+- Easier debugging (see logs in Unity Console)
+- No "Multiple instances" error
+- Unity Editor stays open for inspection
+
 Handles:
-- Unity Editor process management
+- Unity Editor process management (subprocess mode)
+- File-based triggering (file trigger mode)
 - Parameter export to Unity JSON format
 - Simulation result polling
 - Timeout and error handling
@@ -27,47 +38,60 @@ class UnitySimulator:
     """
     Unity Editor automation for running calibration simulations.
 
-    This class encapsulates all Unity-related operations:
-    - Finding Unity Editor executable
-    - Launching Unity with automation method
-    - Polling for simulation results
-    - Process cleanup and timeout handling
-
-    Example:
-        simulator = UnitySimulator()
+    Example (File Trigger - Unity Editor must be open):
+        simulator = UnitySimulator(use_file_trigger=True)
         result_path = simulator.run_simulation(params, "exp_001")
-        # Result file created at result_path
+
+    Example (Subprocess - Unity Editor closed):
+        simulator = UnitySimulator(unity_editor_path="/path/to/Unity.exe", use_file_trigger=False)
+        result_path = simulator.run_simulation(params, "exp_001")
     """
 
     def __init__(
         self,
         unity_editor_path: Optional[str] = None,
         project_path: Optional[str] = None,
-        timeout: int = 600
+        timeout: int = 600,
+        use_file_trigger: bool = True
     ):
         """
         Initialize Unity simulator.
 
         Args:
-            unity_editor_path: Path to Unity.exe (None = auto-detect)
+            unity_editor_path: Path to Unity.exe (None = auto-detect if subprocess mode)
             project_path: Path to Unity project (None = use default)
             timeout: Timeout in seconds for simulation completion (default: 600 = 10min)
+            use_file_trigger: Use file trigger instead of subprocess (default: True)
+                             If True, Unity Editor must be already open
         """
-        self.unity_path = unity_editor_path or self._find_unity_editor()
+        self.use_file_trigger = use_file_trigger
         self.project_path = project_path or r"D:\UnityProjects\META_VERYOLD_P01_s"
         self.timeout = timeout
+
+        # Only find Unity path if NOT using file trigger
+        if not use_file_trigger:
+            self.unity_path = unity_editor_path or self._find_unity_editor()
+        else:
+            self.unity_path = None
 
         # Paths
         self.input_dir = Path(self.project_path) / "Assets/StreamingAssets/Calibration/Input"
         self.output_dir = Path(self.project_path) / "Assets/StreamingAssets/Calibration/Output"
-        self.result_file = self.output_dir / "simulation_result.json"
+        self.result_file = None  # Will be set dynamically per simulation
+        self.trigger_file = Path(self.project_path) / "Assets/StreamingAssets/Calibration/trigger_simulation.txt"
 
         # Ensure directories exist
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.trigger_file.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"[UnitySimulator] Initialized")
-        print(f"  Unity Editor: {self.unity_path}")
+        if self.use_file_trigger:
+            print(f"  Mode:         File Trigger (Unity Editor must be open)")
+            print(f"  Trigger File: {self.trigger_file}")
+        else:
+            print(f"  Mode:         Subprocess (will launch Unity)")
+            print(f"  Unity Editor: {self.unity_path}")
         print(f"  Project:      {self.project_path}")
         print(f"  Timeout:      {self.timeout}s")
 
@@ -127,10 +151,17 @@ class UnitySimulator:
         """
         Run Unity simulation with given parameters.
 
-        Workflow:
+        Workflow (File Trigger mode):
         1. Export parameters to Unity JSON
         2. Delete old result file
-        3. Launch Unity Editor
+        3. Create trigger file
+        4. Poll for result file creation (Unity detects trigger and runs simulation)
+        5. Return result file path
+
+        Workflow (Subprocess mode):
+        1. Export parameters to Unity JSON
+        2. Delete old result file
+        3. Launch Unity Editor subprocess
         4. Poll for result file creation
         5. Terminate Unity process
         6. Return result file path
@@ -165,27 +196,41 @@ class UnitySimulator:
         )
         print(f"[UnitySimulator] Parameters exported: {input_file.name}")
 
-        # Step 2: Delete old result file
+        # Set dynamic result file path for this evaluation
+        # This ensures Input-Output matching: eval_0001_parameters.json <-> eval_0001_result.json
+        self.result_file = self.output_dir / f"{experiment_id}_result.json"
+        print(f"[UnitySimulator] Expected result file: {self.result_file.name}")
+
+        # Step 2: Delete old result file (and .meta file if exists)
         if self.result_file.exists():
             self.result_file.unlink()
             print(f"[UnitySimulator] Deleted old result file")
 
-        # Step 3: Launch Unity Editor
-        process = self._launch_unity()
+        # Delete .meta file to avoid Unity warning
+        meta_file = Path(str(self.result_file) + ".meta")
+        if meta_file.exists():
+            meta_file.unlink()
+            print(f"[UnitySimulator] Deleted old .meta file")
+
+        # Step 3: Launch Unity (mode-dependent)
+        if self.use_file_trigger:
+            process = self._trigger_unity_via_file()
+        else:
+            process = self._launch_unity_subprocess()
 
         # Step 4: Poll for result file
         try:
             self._wait_for_result(process)
         except (TimeoutError, RuntimeError) as e:
-            # Kill Unity if still running
-            if process.poll() is None:
+            # Kill Unity if still running (subprocess mode only)
+            if process is not None and process.poll() is None:
                 print(f"[UnitySimulator] Terminating Unity process...")
                 process.kill()
                 process.wait(timeout=10)
             raise e
 
-        # Step 5: Terminate Unity process
-        if process.poll() is None:
+        # Step 5: Terminate Unity process (subprocess mode only)
+        if process is not None and process.poll() is None:
             print(f"[UnitySimulator] Terminating Unity process...")
             process.terminate()
             process.wait(timeout=30)
@@ -195,9 +240,31 @@ class UnitySimulator:
 
         return str(self.result_file)
 
-    def _launch_unity(self) -> subprocess.Popen:
+    def _trigger_unity_via_file(self) -> None:
         """
-        Launch Unity Editor with automation method.
+        Trigger simulation in already-running Unity Editor via file.
+
+        Creates trigger file that Unity AutomationController monitors.
+
+        Returns:
+            None (no subprocess, Unity already running)
+        """
+        print(f"[UnitySimulator] Using file trigger mode")
+        print(f"[UnitySimulator] Creating trigger file...")
+
+        # Ensure trigger directory exists
+        self.trigger_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create trigger file
+        self.trigger_file.write_text("TRIGGER")
+        print(f"[UnitySimulator] Trigger file created: {self.trigger_file.name}")
+        print(f"[UnitySimulator] Unity Editor should detect file and start simulation...")
+
+        return None  # No process to manage
+
+    def _launch_unity_subprocess(self) -> subprocess.Popen:
+        """
+        Launch Unity Editor as subprocess with automation method.
 
         Returns:
             subprocess.Popen object
@@ -209,7 +276,7 @@ class UnitySimulator:
             "-logFile", "-"  # Log to stdout (captured by Popen)
         ]
 
-        print(f"[UnitySimulator] Launching Unity Editor...")
+        print(f"[UnitySimulator] Launching Unity Editor as subprocess...")
         print(f"[UnitySimulator] Method: Calibration_hybrid_AutomationController.RunCalibrationSimulation")
 
         process = subprocess.Popen(
@@ -222,16 +289,16 @@ class UnitySimulator:
         print(f"[UnitySimulator] Unity process started (PID: {process.pid})")
         return process
 
-    def _wait_for_result(self, process: subprocess.Popen):
+    def _wait_for_result(self, process: Optional[subprocess.Popen]):
         """
         Poll for simulation result file creation.
 
         Args:
-            process: Unity process to monitor
+            process: Unity process to monitor (None if file trigger mode)
 
         Raises:
             TimeoutError: If result file not created within timeout
-            RuntimeError: If Unity process exits with error
+            RuntimeError: If Unity process exits with error (subprocess mode only)
         """
         print(f"[UnitySimulator] Waiting for result file...")
         print(f"[UnitySimulator] Polling: {self.result_file}")
@@ -247,8 +314,8 @@ class UnitySimulator:
                 print(f"[UnitySimulator] Result file created after {elapsed:.1f}s")
                 return
 
-            # Check if Unity process crashed
-            if process.poll() is not None:
+            # Check if Unity process crashed (subprocess mode only)
+            if process is not None and process.poll() is not None:
                 exit_code = process.returncode
                 print(f"[UnitySimulator] ERROR: Unity process exited (code: {exit_code})")
 
@@ -292,8 +359,14 @@ def test_unity_simulator():
     Run this to verify Unity automation works before using in optimization.
     """
     print("="*80)
-    print("UNITY SIMULATOR TEST")
+    print("UNITY SIMULATOR TEST (FILE TRIGGER MODE)")
     print("="*80)
+    print()
+    print("IMPORTANT: Unity Editor must be open with the project loaded!")
+    print("Project: D:\\UnityProjects\\META_VERYOLD_P01_s")
+    print()
+    input("Press ENTER when Unity Editor is ready...")
+    print()
 
     # Import baseline parameters
     from core.parameter_utils import get_baseline_parameters, params_dict_to_array
@@ -304,8 +377,8 @@ def test_unity_simulator():
     print(f"Testing with baseline parameters")
     print(f"Parameters: {list(baseline.keys())[:3]}... ({len(baseline)} total)")
 
-    # Create simulator
-    simulator = UnitySimulator(timeout=600)
+    # Create simulator (file trigger mode)
+    simulator = UnitySimulator(timeout=600, use_file_trigger=True)
 
     # Run simulation
     try:
@@ -319,11 +392,12 @@ def test_unity_simulator():
             result = json.load(f)
 
         print(f"[TEST] Experiment ID: {result.get('experimentId')}")
-        print(f"[TEST] Successful: {result.get('successful')}")
         print(f"[TEST] Total Agents: {result.get('totalAgents')}")
 
     except Exception as e:
         print(f"\n[TEST] FAILED: {e}")
+        import traceback
+        traceback.print_exc()
         raise
 
     finally:
