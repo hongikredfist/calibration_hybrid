@@ -5,13 +5,21 @@ This is the main entry point for running automated parameter optimization
 with different algorithms.
 
 Usage:
-    python run_optimization.py --algorithm scipy_de --max-evals 100 --seed 42
+    # Default (720 evals, intuitive interface)
+    python run_optimization.py --algorithm scipy_de
 
-    python run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5 --test
+    # Custom generations and population
+    python run_optimization.py --algorithm scipy_de --popsize 10 --generations 4
+
+    # Quick test
+    python run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+
+    # Reproducible run (specify seed)
+    python run_optimization.py --algorithm scipy_de --seed 42
 
 Future algorithms:
-    python run_optimization.py --algorithm bayesian --max-evals 100
-    python run_optimization.py --algorithm cmaes --max-evals 100
+    python run_optimization.py --algorithm bayesian
+    python run_optimization.py --algorithm cmaes
 """
 
 import argparse
@@ -30,7 +38,7 @@ from core.history_tracker import OptimizationHistory
 from optimizer.scipy_de_optimizer import ScipyDEOptimizer
 
 
-def create_optimizer(args, bounds, objective_function):
+def create_optimizer(args, bounds, objective_function, max_evaluations):
     """
     Factory function to create optimizer based on CLI arguments.
 
@@ -38,6 +46,7 @@ def create_optimizer(args, bounds, objective_function):
         args: Argparse namespace
         bounds: Parameter bounds
         objective_function: Objective function callable
+        max_evaluations: Calculated max evaluations
 
     Returns:
         BaseOptimizer instance
@@ -46,9 +55,10 @@ def create_optimizer(args, bounds, objective_function):
         return ScipyDEOptimizer(
             bounds=bounds,
             objective_function=objective_function,
-            max_evaluations=args.max_evals,
+            max_evaluations=max_evaluations,
             seed=args.seed,
             popsize=args.popsize,
+            generations=args.generations,
             strategy=args.strategy
         )
     # Future algorithms:
@@ -95,14 +105,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Test run (10 evaluations, ~1 hour)
-  python run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
+  # Default (720 evals, ~2-3 days)
+  python run_optimization.py --algorithm scipy_de
 
-  # Production run (750 evaluations, ~3 days)
-  python run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+  # Quick test (36 evals, ~5 hours)
+  python run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+
+  # More exploration (1350 evals, ~5 days)
+  python run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+
+  # Reproducible run (specify seed)
+  python run_optimization.py --algorithm scipy_de --seed 42
 
   # Custom Unity path
-  python run_optimization.py --algorithm scipy_de --max-evals 100 --unity-path "C:/Unity/Editor/Unity.exe"
+  python run_optimization.py --algorithm scipy_de --unity-path "C:/Unity/Editor/Unity.exe"
         """
     )
 
@@ -113,19 +129,19 @@ Examples:
         default='scipy_de',
         help='Optimization algorithm to use'
     )
-    parser.add_argument(
-        '--max-evals',
-        type=int,
-        required=True,
-        help='Maximum number of objective evaluations (Unity simulations)'
-    )
 
     # Optional arguments
     parser.add_argument(
         '--seed',
         type=int,
-        default=42,
-        help='Random seed for reproducibility (default: 42)'
+        default=None,
+        help='Random seed for reproducibility (default: None = auto-generate and save for reproducibility)'
+    )
+    parser.add_argument(
+        '--max-evals',
+        type=int,
+        default=None,
+        help='[Optional] Hard limit on evaluations (default: None = auto-calculate from popsize×generations)'
     )
     parser.add_argument(
         '--unity-path',
@@ -156,8 +172,14 @@ Examples:
     parser.add_argument(
         '--popsize',
         type=int,
-        default=15,
-        help='[Scipy DE] Population size (default: 15)'
+        default=10,
+        help='[Scipy DE] Population multiplier: actual_pop = popsize × 18 params (default: 10 → 180 individuals/gen)'
+    )
+    parser.add_argument(
+        '--generations',
+        type=int,
+        default=4,
+        help='[Scipy DE] Number of generations (default: 4)'
     )
     parser.add_argument(
         '--strategy',
@@ -169,6 +191,18 @@ Examples:
 
     args = parser.parse_args()
 
+    # Initialize components
+    bounds = load_parameter_bounds()
+    n_params = len(bounds)
+
+    # Calculate max_evaluations
+    if args.max_evals is None:
+        # Auto-calculate from popsize × n_params × generations
+        max_evaluations = args.popsize * n_params * args.generations
+    else:
+        # User-specified override
+        max_evaluations = args.max_evals
+
     # Print configuration
     print("=" * 80)
     print("PARAMETER CALIBRATION - AUTOMATED OPTIMIZATION (FILE TRIGGER MODE)")
@@ -178,24 +212,27 @@ Examples:
     print("Project: D:\\UnityProjects\\META_VERYOLD_P01_s")
     print()
     print(f"Algorithm:       {args.algorithm}")
-    print(f"Max Evaluations: {args.max_evals}")
-    print(f"Random Seed:     {args.seed}")
+    print(f"Max Evaluations: {max_evaluations}")
+    print(f"Random Seed:     {args.seed if args.seed is not None else 'Random'}")
     print(f"Unity Timeout:   {args.timeout}s per simulation")
     print(f"Output Dir:      {args.output_dir}")
 
     if args.algorithm == 'scipy_de':
+        actual_pop = args.popsize * n_params
         print(f"\nScipyDE Configuration:")
-        print(f"  Population:    {args.popsize}")
+        print(f"  Population:    {args.popsize} (multiplier) → {actual_pop} individuals/generation")
+        print(f"  Generations:   {args.generations}")
         print(f"  Strategy:      {args.strategy}")
-        print(f"  Generations:   ~{args.max_evals // args.popsize}")
+        if args.max_evals is not None:
+            print(f"  Note:          max-evals override active ({args.max_evals} limit)")
 
     print("=" * 80)
     print()
 
     # Confirm with user
-    estimated_time = args.max_evals * 7 / 60  # 7 minutes per eval average
+    estimated_time = max_evaluations * 7 / 60  # 7 minutes per eval average
     print(f"Estimated time: {estimated_time:.1f} hours ({estimated_time/24:.1f} days)")
-    print(f"This will run {args.max_evals} Unity simulations automatically.")
+    print(f"This will run {max_evaluations} Unity simulations automatically.")
     print(f"Unity Editor will remain open during optimization.")
     print()
 
@@ -205,10 +242,7 @@ Examples:
         return
 
     print("\nStarting optimization...\n")
-
-    # Initialize components
-    bounds = load_parameter_bounds()
-    print(f"Loaded {len(bounds)} parameter bounds")
+    print(f"Loaded {n_params} parameter bounds")
 
     # Use file trigger mode (Unity Editor must be open)
     unity_sim = UnitySimulator(
@@ -244,7 +278,7 @@ Examples:
     )
 
     # Create optimizer
-    optimizer = create_optimizer(args, bounds, obj_func)
+    optimizer = create_optimizer(args, bounds, obj_func, max_evaluations)
 
     # Run optimization
     try:

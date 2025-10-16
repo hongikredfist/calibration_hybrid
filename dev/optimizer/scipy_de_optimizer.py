@@ -24,21 +24,39 @@ class ScipyDEOptimizer(BaseOptimizer):
     - Robust to noise and local minima
     - Simple configuration (3-4 hyperparameters)
 
+    IMPORTANT - Scipy popsize behavior:
+    - popsize is a MULTIPLIER, not absolute population size
+    - Actual population = popsize × n_parameters
+    - For 18 parameters: popsize=10 → 180 individuals/generation
+    - Total evaluations = (popsize × n_params) × generations
+    - Recommended popsize range: 5-15 (90-270 individuals for 18D problem)
+    - Minimum 3 generations needed for evolution to work effectively
+
     References:
         - Storn & Price (1997): "Differential Evolution - A Simple and Efficient
           Heuristic for Global Optimization over Continuous Spaces"
         - scipy.optimize.differential_evolution documentation
 
     Example:
+        # Direct generations control (recommended)
         optimizer = ScipyDEOptimizer(
             bounds=[(0.15, 0.35), (0.3, 0.8), ...],  # 18 parameter bounds
             objective_function=obj_func,
-            max_evaluations=100,
-            popsize=15,
-            seed=42
+            max_evaluations=720,  # Used for history tracking
+            popsize=10,           # 10×18 = 180 individuals/generation
+            generations=4,        # 4 generations
+            seed=None             # Random seed (default)
         )
         result = optimizer.optimize()
         print(f"Best objective: {result.best_objective}")
+
+        # Alternative: auto-calculate generations from max_evaluations
+        optimizer = ScipyDEOptimizer(
+            bounds=bounds,
+            objective_function=obj_func,
+            max_evaluations=720,  # Auto: 720/(10×18) = 4 generations
+            popsize=10
+        )
     """
 
     def __init__(
@@ -47,7 +65,8 @@ class ScipyDEOptimizer(BaseOptimizer):
         objective_function: Callable[[np.ndarray], float],
         max_evaluations: int,
         seed: Optional[int] = None,
-        popsize: int = 15,
+        popsize: int = 10,
+        generations: Optional[int] = None,
         strategy: str = 'best1bin',
         mutation: Tuple[float, float] = (0.5, 1.0),
         recombination: float = 0.7,
@@ -60,9 +79,10 @@ class ScipyDEOptimizer(BaseOptimizer):
         Args:
             bounds: Parameter bounds [(min, max), ...]
             objective_function: Function to minimize, signature: params -> objective
-            max_evaluations: Maximum number of objective function evaluations
-            seed: Random seed for reproducibility
-            popsize: Population size (individuals per generation)
+            max_evaluations: Target number of evaluations (used if generations not specified)
+            seed: Random seed for reproducibility (None = random seed)
+            popsize: Population multiplier (actual_pop = popsize × n_params, default: 10, recommended: 5-15)
+            generations: Number of generations (default: None = auto-calculate from max_evaluations)
             strategy: DE mutation strategy ('best1bin', 'rand1bin', 'best2bin', etc.)
             mutation: Mutation factor range (min, max)
             recombination: Crossover probability [0, 1]
@@ -78,10 +98,24 @@ class ScipyDEOptimizer(BaseOptimizer):
         self.atol = atol
         self.tol = tol
 
+        # Generate random seed if not provided (for reproducibility)
+        if seed is None:
+            import random
+            self.seed = random.randint(0, 2**31 - 1)
+            self.seed_was_random = True
+        else:
+            self.seed_was_random = False
+
         # Calculate max iterations (generations)
-        # Scipy DE evaluates popsize * maxiter individuals
-        # We want exactly max_evaluations total, so use callback to stop early
-        self.maxiter = max_evaluations // popsize
+        # Priority: generations parameter > auto-calculate from max_evaluations
+        n_params = len(bounds)
+        if generations is not None:
+            self.maxiter = generations
+            self.generations = generations
+        else:
+            # Auto-calculate: max_evals / (popsize × n_params)
+            self.maxiter = max_evaluations // (popsize * n_params)
+            self.generations = self.maxiter
 
     def optimize(self) -> OptimizerResult:
         """
@@ -106,7 +140,10 @@ class ScipyDEOptimizer(BaseOptimizer):
         print(f"Strategy:        {self.strategy}")
         print(f"Mutation:        {self.mutation}")
         print(f"Recombination:   {self.recombination}")
-        print(f"Random Seed:     {self.seed}")
+        if self.seed_was_random:
+            print(f"Random Seed:     {self.seed} (auto-generated, use --seed {self.seed} to reproduce)")
+        else:
+            print(f"Random Seed:     {self.seed} (user-specified)")
         print("=" * 80)
         print()
 
@@ -195,7 +232,8 @@ class ScipyDEOptimizer(BaseOptimizer):
             best_objective=result.fun,
             n_evaluations=eval_counter[0],
             message=message,
-            algorithm_name=self.get_algorithm_name()
+            algorithm_name=self.get_algorithm_name(),
+            seed=self.seed
         )
 
     def get_algorithm_name(self) -> str:

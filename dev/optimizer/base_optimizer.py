@@ -24,6 +24,7 @@ class OptimizerResult:
     n_evaluations: int
     message: str
     algorithm_name: str
+    seed: Optional[int] = None  # Random seed used (for reproducibility)
 
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
@@ -33,7 +34,8 @@ class OptimizerResult:
             'best_objective': float(self.best_objective),
             'n_evaluations': int(self.n_evaluations),
             'message': self.message,
-            'algorithm_name': self.algorithm_name
+            'algorithm_name': self.algorithm_name,
+            'seed': self.seed
         }
 
 

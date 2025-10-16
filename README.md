@@ -53,7 +53,11 @@ Python (결과 평가 → 새 파라미터)
   - ✅ 자동 분석 및 그래프 생성
   - ✅ 테스트 완료 (TESTING.md 5단계 검증)
 
-**상태**: 프로덕션 최적화 준비 완료 (750 evaluations, ~3일 소요)
+**상태**: 프로덕션 최적화 준비 완료 (720 evaluations, ~2-3일 소요)
+
+**최근 업데이트 (2025-10-16)**:
+- ✅ CLI 인터페이스 개선 (`--popsize` + `--generations` 직관적 제어)
+- ✅ Seed 재현성 기능 (자동 생성된 시드 저장)
 
 ---
 
@@ -90,11 +94,14 @@ pip install -r requirements.txt
 
 ### Step 3: 자동 최적화 실행
 ```bash
-# 테스트 실행 (10 evaluations, ~1시간)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
+# 기본 실행 (720 evaluations, ~2-3일) - 가장 간단!
+python dev/run_optimization.py --algorithm scipy_de
 
-# 프로덕션 실행 (750 evaluations, ~3일)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+# 빠른 테스트 (36 evaluations, ~5시간)
+python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+
+# 더 많은 탐색 (1350 evaluations, ~5일)
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
 ```
 
 **자동으로 실행됨**:
@@ -102,6 +109,11 @@ python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15
 - Unity가 자동으로 시뮬레이션 실행 (파일 트리거 방식)
 - 결과 자동 평가 및 다음 파라미터 생성
 - 최적화 완료 후 convergence plot 자동 생성
+
+**참고**:
+- Seed는 기본적으로 매번 자동 생성됩니다 (다양성 확보)
+- 자동 생성된 시드는 결과 파일에 저장되어 나중에 재현 가능
+- 재현이 필요한 실험에서만 `--seed 42` 처럼 직접 지정
 
 ### Step 4: 결과 확인
 최적화 완료 후 자동 생성된 파일들:
@@ -121,30 +133,54 @@ python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15
 #### 완전 자동화 모드 (권장)
 ```bash
 # Unity Editor 열어둔 상태에서 실행
-python dev/run_optimization.py --algorithm scipy_de --max-evals 100 --popsize 10
+
+# 기본 실행 (가장 간단, 권장)
+python dev/run_optimization.py --algorithm scipy_de
+# → popsize=10, generations=4 → 720 evals
+
+# 빠른 테스트
+python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+# → 36 evals (~5시간)
+
+# 더 많은 탐색 (큰 population)
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+# → 1350 evals (~5일)
+
+# 재현 가능한 실험 (seed 지정)
+python dev/run_optimization.py --algorithm scipy_de --seed 42
 
 # 고급 옵션
 python dev/run_optimization.py \
   --algorithm scipy_de \
-  --max-evals 750 \
-  --popsize 15 \
+  --popsize 10 \
+  --generations 4 \
   --strategy best1bin \
   --seed 42 \
   --timeout 1200
 ```
 
-**옵션 설명**:
-- `--max-evals`: 총 시뮬레이션 실행 횟수
-- `--popsize`: 세대당 개체 수 (큰 값 = 더 넓은 탐색)
-- `--strategy`: 진화 전략 (best1bin, rand1bin 등)
-- `--seed`: 재현성을 위한 랜덤 시드
-- `--timeout`: 시뮬레이션당 최대 대기 시간 (초)
+**주요 옵션 설명**:
+- `--popsize`: 탐색 범위 (기본값: 10, 권장: 5-15)
+  - 값이 클수록 더 넓은 영역 탐색 (느림)
+- `--generations`: 진화 세대 수 (기본값: 4, 권장: 3-10)
+  - 값이 클수록 더 정교한 수렴 (느림)
+- `--seed`: 랜덤 시드 (기본값: None = 자동 생성)
+  - 자동 생성된 시드는 결과 파일에 저장되어 재현 가능
+  - 재현 필요시만 직접 지정: `--seed 42`
+- `--max-evals`: [고급] 강제 평가 제한 (선택사항)
 
-**자동 생성 파일**:
-- `optimization_history_ScipyDE_pop15_best1bin_20251016_163602.csv` - 유니크 히스토리
-- `optimization_history_ScipyDE_pop15_best1bin_20251016_163602.png` - 수렴 그래프
-- `result_ScipyDE_pop15_best1bin_20251016_163602.json` - 메타데이터
-- `best_parameters.json` - 최적 파라미터
+**실제 평가 횟수**: `popsize`와 `generations` 값에 따라 자동 계산
+- 기본값: **720회** (약 2-3일 소요)
+- 빠른 테스트: **36회** (약 5시간)
+- 더 많은 탐색: **1350회** (약 5일)
+
+**자동 생성 파일** (`data/output/` 디렉토리):
+- `best_parameters.json` - 최적 파라미터 (메인 결과)
+- `optimization_history_*.csv` - 전체 평가 히스토리
+- `optimization_history_*.png` - 수렴 그래프
+- `result_*.json` - 메타데이터 (seed, 알고리즘 설정 등)
+
+**재현성**: 콘솔 출력과 result JSON에 자동 생성된 seed가 저장되므로, `--seed` 옵션으로 동일한 결과 재현 가능
 
 ### 유틸리티: 데이터 검증 및 평가
 
@@ -191,11 +227,14 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
 
 **자주 사용하는 커맨드**:
 ```bash
-# 테스트 최적화 (10 evaluations, ~1시간)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
+# 기본 최적화 (720 evals, ~2-3일) - 가장 간단!
+python dev/run_optimization.py --algorithm scipy_de
 
-# 프로덕션 최적화 (750 evaluations, ~3일)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+# 빠른 테스트 (36 evals, ~5시간)
+python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+
+# 더 많은 탐색 (1350 evals, ~5일)
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
 
 # Unity 결과 확인
 python dev/load_simulation_results.py --verbose
@@ -250,30 +289,29 @@ calibration_hybrid/
 
 ## 문제 해결
 
-**Unity 결과 파일을 찾을 수 없음**:
-- Unity 시뮬레이션이 정상 완료되었는지 확인
-- 출력 경로: `StreamingAssets/Calibration/Output/simulation_result.json`
+### 시작 전 체크리스트
+- [ ] Python 가상환경 활성화: `.venv\Scripts\activate`
+- [ ] 패키지 설치: `pip install -r requirements.txt`
+- [ ] Unity Editor 열기: `D:\UnityProjects\META_VERYOLD_P01_s\`
+- [ ] Scene 로드: `Calibration_Hybrid.unity` (**Calibration.unity 아님**)
 
-**Python 스크립트 실행 오류**:
+### 자주 발생하는 문제
+
+**실행 안됨**:
+- Unity Editor가 열려 있는지 확인
+- Unity 콘솔에서 `[AutomationController] File trigger system initialized` 메시지 확인
+
+**Python 오류**:
 ```bash
-.venv\Scripts\activate
 pip install -r requirements.txt
-pip list  # 설치 확인
 ```
 
-**Unity Editor가 자동 실행되지 않음**:
-- Unity Editor가 열려 있는지 확인
-- `Calibration_Hybrid.unity` scene이 로드되어 있는지 확인
-- 콘솔에서 `[AutomationController] File trigger system initialized` 메시지 확인
+**최적화 개선 안됨**:
+- `data/output/optimization_history_*.png` 그래프 확인
+- 값이 평평하면 수렴 완료 (정상)
+- 더 탐색: `--popsize 15 --generations 5`
 
-**Optimization이 개선되지 않음**:
-- Convergence plot 확인: `data/output/optimization_history_*.png`
-- Local minimum 가능성: population size 증가 (`--popsize 20`)
-- 더 많은 evaluations: `--max-evals 1000`
-
-**시뮬레이션이 중간에 멈춤**:
-- Unity 콘솔에서 에러 메시지 확인
-- Timeout 증가: `--timeout 1200` (기본 600초 → 1200초)
+**자세한 문제 해결**: `dev/TESTING.md` 참조
 
 ---
 

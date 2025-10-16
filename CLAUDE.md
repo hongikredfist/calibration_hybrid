@@ -64,6 +64,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Expected task progress (use TODO comments)
 - Temporary experiments (use git branches)
 
+### "update md" Command Protocol
+
+When user says **"update md"**, perform full session documentation:
+
+**1. Review Session Work** (analyze what was done):
+- Code changes and new features
+- Bug fixes and decisions
+- User's explicit requests and feedback
+- Problems solved
+
+**2. Update CLAUDE.md**:
+- Current Status: Update phase, last session summary
+- Completed: Check off finished items, add dates
+- Development History: Add new entry if non-trivial bug/decision
+- Next Steps: Update immediate task
+- Development Commands: Add new workflows if any
+- Remove stale information
+
+**3. Update README.md**:
+- 현재 상태: Update phase, recent updates
+- 빠른 시작: Update if workflow changed
+- 상세 사용법: Update if new features/options
+- Quick Reference: Keep commands current
+- Remove outdated troubleshooting
+
+**4. Quality Checks**:
+- Language: CLAUDE.md (English), README.md (Korean)
+- No Korean in CLAUDE.md
+- No low-level details (line counts, code snippets)
+- No duplicate information between sections
+- No stale/outdated commands or paths
+- All examples tested and working
+- Next session can /init and immediately continue work
+
+**5. Final Verification**:
+- Current phase clearly stated
+- Last session captured (1-2 sentences)
+- Next task actionable with acceptance criteria
+- No rule violations (check Purpose, Structure, Language Policy)
+- Information sufficient for perfect follow-up session
+
 ### Quality Checklist
 Before ending session, verify:
 - [ ] Current phase clearly stated
@@ -81,11 +122,11 @@ Before ending session, verify:
 
 ### Architecture
 ```
-Python (generate_parameters.py)
-    ↓ parameters.json
+Python (run_optimization.py)
+    ↓ eval_XXXX_parameters.json
 Unity Simulation (PIONA/SFM 18 params)
-    ↓ simulation_result.json
-Python (evaluate_objective.py)
+    ↓ eval_XXXX_result.json
+Python (objective_function.py)
     ↓ objective score
 Scipy Differential Evolution
     ↓ next parameters
@@ -120,7 +161,7 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 **Phase**: Phase 4B Complete ✅
 **Current Task**: Production optimization ready
-**Last Session**: Completed Phase 4B implementation, testing, refinements, and code cleanup. System fully automated and tested.
+**Last Session**: CLI refactoring (popsize+generations interface), seed reproducibility feature implemented. All Phase 4B work complete.
 
 ### Completed
 
@@ -163,14 +204,18 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 - [x] **Bug fixes**: Scene path, .meta file warning, off-by-one error, simulation not stopping
 - [x] **Feature additions**: File trigger system, Input-Output 1:1 matching, unique history files, auto-analysis
 - [x] **Code cleanup**: Phase 3 archived, modular structure finalized
+- [x] **CLI refactoring**: Intuitive popsize+generations interface (2025-10-16)
+- [x] **Seed reproducibility**: Auto-generate and save random seeds for reproducibility (2025-10-16)
 
 ### Next
 
 #### Production Optimization (Ready to start)
-- [ ] Run production optimization (750 evaluations, ~3 days)
-  - Command: `python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42`
+- [ ] Run production optimization (720 evaluations, ~2-3 days)
+  - Recommended: `python dev/run_optimization.py --algorithm scipy_de`
+  - Alternative: `python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5` (1350 evals)
   - Unity Editor must be open during execution
   - Can run unattended after initial confirmation
+  - Specify seed only for reproducibility: `--seed 42`
 - [ ] Analyze convergence and parameter sensitivity
 - [ ] Compare with baseline (4.5932)
 - [ ] Document final calibrated parameters
@@ -198,11 +243,18 @@ pip install -r requirements.txt
 
 ### Phase 4B: Automated Optimization (Production Ready)
 ```bash
-# Quick test (10 evals, ~1 hour)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 10 --popsize 5
+# Default (720 evals, ~2-3 days)
+python dev/run_optimization.py --algorithm scipy_de
+# → popsize=10, generations=4 → 10×18×4 = 720 evals
 
-# Production (750 evals, ~3 days)
-python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+# Quick test (36 evals, ~5 hours)
+python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+
+# Production with more exploration (1350 evals, ~5 days)
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+
+# Reproducible run (for experiments)
+python dev/run_optimization.py --algorithm scipy_de --seed 42
 
 # Manual analysis (auto-called after optimization)
 python -c "from dev.analysis.analyze_history import analyze_optimization_history; analyze_optimization_history('data/output/optimization_history_*.csv')"
@@ -222,8 +274,8 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
 **Unity**: `D:\UnityProjects\META_VERYOLD_P01_s\`
 - Scripts: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 - Scene: `Assets\VeryOld_P01_s\Scene\PedModel\Calibration_Hybrid.unity`
-- Input: `Assets\StreamingAssets\Calibration\Input\*_parameters.json`
-- Output: `Assets\StreamingAssets\Calibration\Output\simulation_result.json`
+- Input: `Assets\StreamingAssets\Calibration\Input\eval_XXXX_parameters.json`
+- Output: `Assets\StreamingAssets\Calibration\Output\eval_XXXX_result.json`
 
 **Python**: `c:\dev\calibration_hybrid\`
 - Main: `dev/run_optimization.py` (unified entry point)
@@ -259,7 +311,7 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
 6. `Calibration_hybrid_OutputManager.cs`
    - Collects parameters from InputManager
    - Collects errors from ExtractError via reflection
-   - Saves simulation_result.json to StreamingAssets/Output/
+   - Saves eval_XXXX_result.json to StreamingAssets/Output/
    - Auto-stops Play mode when complete
 
 **Python Side** (c:\dev\calibration_hybrid\dev\) - Phase 4B Modular Architecture:
@@ -331,7 +383,7 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
 }
 ```
 
-**Unity → Python** (simulation_result.json):
+**Unity → Python** (eval_XXXX_result.json / simulation_result.json):
 ```json
 {
   "experimentId": "exp_20250115_103000_a1b2c3d4",
@@ -402,19 +454,96 @@ scipy.optimize.differential_evolution(
     bounds=[(min, max) for each of 18 params],
     strategy='best1bin',      # Mutation strategy
     maxiter=50,               # Generations
-    popsize=15,               # Individuals per generation
+    popsize=15,               # Population multiplier (NOT absolute size)
     mutation=(0.5, 1.0),      # Default mutation factor range
     recombination=0.7,        # Default crossover probability
     callback=early_stop_callback  # Hard limit on evaluations
 )
 ```
 
-**Total Evaluations**: `maxiter × popsize = 50 × 15 = 750` Unity simulations
+**IMPORTANT: Scipy popsize Behavior**:
+- `popsize` is a **multiplier**, not absolute population size
+- Actual population = `popsize × n_parameters = popsize × 18`
+- **Total evaluations** = `(popsize × 18) × generations`
+- Example: `popsize=10, generations=4` → 10×18×4 = 720 evaluations
+
+**Recommended Settings**:
+```bash
+# Default (balanced, recommended)
+python dev/run_optimization.py --algorithm scipy_de
+# → popsize=10, generations=4 → 720 evals
+
+# More exploration (larger population)
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+# → 15×18×5 = 1350 evals
+
+# More convergence (more generations)
+python dev/run_optimization.py --algorithm scipy_de --popsize 8 --generations 8
+# → 8×18×8 = 1152 evals
+
+# Quick test
+python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
+# → 2×18×1 = 36 evals
+```
+
+**Theory Guidelines**:
+- Population size: 5N ~ 10N recommended (N=18 → 90~180 individuals)
+  - `popsize=5~10` is optimal range
+- Minimum generations: 3+ (1 gen = random search, no evolution)
+- No complex calculation needed - just set `--popsize` and `--generations`
+
 **Expected Runtime**: 1-3 days (5-10 min per simulation)
 
 ---
 
 ## Development History
+
+### 2025-10-16: CLI Refactoring and Seed Reproducibility
+
+**Context**: User feedback on confusing `--max-evals` parameter and seed reproducibility concerns
+
+**Problem 1 - Non-intuitive CLI**:
+- Users had to manually calculate: `max-evals = popsize × 18 × generations`
+- Example: `--max-evals 720 --popsize 10` → user must know 720 = 10×18×4
+- Scipy's `popsize` as multiplier (not absolute size) was non-intuitive
+- `--seed 42` always used → no exploration diversity between runs
+
+**Solution 1 - Direct generations Parameter**:
+```bash
+# Before (complex)
+--max-evals 720 --popsize 10 --seed 42
+
+# After (intuitive)
+--popsize 10 --generations 4
+# → auto-calculates: 10×18×4 = 720 evals
+```
+
+**Problem 2 - Seed Reproducibility**:
+- User concern: With `seed=None`, results non-reproducible
+- Scipy generates random seed internally but doesn't save it
+- No way to reproduce results without knowing seed value
+
+**Solution 2 - Auto-generate and Save Seed**:
+- Auto-generate random seed if None (0 to 2^31-1)
+- Store seed in `OptimizerResult.seed` field
+- Print reproduction command in console output
+- Save seed to result JSON file for later reference
+
+**Changes Made**:
+1. **New `--generations` parameter**: Direct control over evolution cycles (default: 4)
+2. **`--max-evals` now optional**: Only used as safety override (default: None)
+3. **`--seed` default None**: Random seed each run, auto-generated and saved
+4. **`--popsize` default 10** (was 15): More balanced for 18D problem (180 individuals/gen)
+5. **Auto-calculation**: `max_evals = popsize × n_params × generations` when not specified
+6. **Seed storage**: Added `seed` field to `OptimizerResult` and result JSON files
+7. **Seed reproduction guide**: Console prints exact command to reproduce results
+
+**Impact**:
+- ✅ Intuitive interface: Users think in DE concepts (10 individuals, 4 generations)
+- ✅ No mental math required for evaluation count
+- ✅ Seed diversity by default (auto-generated each run)
+- ✅ Full reproducibility: seed saved in result JSON and printed in console
+- ✅ Backward compatible: old `--max-evals` style still works
 
 ### 2025-10-16: Phase 4B Refinements and Code Cleanup
 
@@ -504,18 +633,10 @@ dev/
 - Time investment: 8 hours implementation + 8 hours testing/refinement
 - **Status**: Complete and production-ready (2025-10-16)
 
-**Files Created** (2025-10-15):
-- `dev/core/parameter_utils.py` (100 lines)
-- `dev/core/unity_simulator.py` (300 lines)
-- `dev/core/objective_function.py` (150 lines)
-- `dev/core/history_tracker.py` (100 lines, extracted 2025-10-16)
-- `dev/optimizer/base_optimizer.py` (150 lines)
-- `dev/optimizer/scipy_de_optimizer.py` (250 lines)
-- `dev/analysis/analyze_history.py` (200 lines, extracted 2025-10-16)
-- `dev/run_optimization.py` (150 lines)
-- `D:\UnityProjects\...\Calibration_hybrid_AutomationController.cs` (175 lines)
-- `dev/TESTING.md` (consolidated test guide)
-- `archive/phase3/README.md` (Phase 3 documentation, 2025-10-16)
+**Files Created**:
+- Python modules: `core/`, `optimizer/`, `analysis/` directories
+- Unity: `Calibration_hybrid_AutomationController.cs`
+- Documentation: `dev/TESTING.md`, `archive/phase3/README.md`
 
 ---
 
@@ -527,26 +648,35 @@ dev/
 
 **Status**: Ready to start (Phase 4B complete, all tests passed)
 
-**Command**:
+**Recommended Commands**:
 ```bash
-python dev/run_optimization.py --algorithm scipy_de --max-evals 750 --popsize 15 --seed 42
+# Default (balanced, recommended)
+python dev/run_optimization.py --algorithm scipy_de
+# → Uses default: popsize=10, generations=4 → 720 evals
+
+# Reproducible run (for experiments)
+python dev/run_optimization.py --algorithm scipy_de --seed 42
+
+# More exploration
+python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+# → 1350 evals
 ```
 
 **Prerequisites**:
 - Unity Editor must be open with `Calibration_Hybrid.unity` scene
-- Estimated time: ~3 days (750 evaluations × 5-10 min each)
+- Estimated time: ~2-3 days (720-810 evaluations × 5-10 min each)
 - Can run unattended after initial confirmation prompt
 
 **Expected Outputs**:
 - `data/output/best_parameters.json` - Best 18 SFM parameters found
-- `data/output/optimization_history_ScipyDE_pop15_best1bin_YYYYMMDD_HHMMSS.csv` - Full history
-- `data/output/optimization_history_ScipyDE_pop15_best1bin_YYYYMMDD_HHMMSS.png` - Convergence plot
-- `data/output/result_ScipyDE_pop15_best1bin_YYYYMMDD_HHMMSS.json` - Full result metadata
+- `data/output/optimization_history_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.csv` - Full history
+- `data/output/optimization_history_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.png` - Convergence plot
+- `data/output/result_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.json` - Full result metadata
 
 **Success Criteria**:
 - Objective < 4.5932 (baseline)
 - Convergence visible in plot (diminishing improvements)
-- No Unity crashes or errors during 750 evaluations
+- No Unity crashes or errors during optimization
 
 **After Production Run**:
 1. Analyze parameter sensitivity
