@@ -315,6 +315,8 @@ Examples:
         print(f"Best Objective:   {result.best_objective:.4f}")
         print(f"Total Evaluations: {result.n_evaluations}")
         print(f"Message:          {result.message}")
+        if result.seed is not None:
+            print(f"Random Seed:      {result.seed}")
         print()
         print("Files created:")
         print(f"  - Results:      {result_file}")
@@ -327,6 +329,16 @@ Examples:
             print(f"  - Plot:         {plot_file}")
 
         print("=" * 80)
+
+        # Print reproduction command
+        if result.seed is not None:
+            print()
+            print("To reproduce this result:")
+            if args.algorithm == 'scipy_de':
+                print(f"  python dev/run_optimization.py --algorithm scipy_de --popsize {args.popsize} --generations {args.generations} --seed {result.seed}")
+            else:
+                print(f"  python dev/run_optimization.py --algorithm {args.algorithm} --seed {result.seed}")
+            print("=" * 80)
 
     except KeyboardInterrupt:
         print("\n\nOptimization interrupted by user (Ctrl+C)")

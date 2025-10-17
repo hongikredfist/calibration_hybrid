@@ -89,11 +89,29 @@ def analyze_optimization_history(history_path: str):
     print(f"Std objective:     {np.std(objectives):.4f}")
     print()
 
-    # Group by generation (assuming evaluations are sequential)
+    # Group by generation
     max_iter = max(iterations)
-    generation_size = len([i for i in iterations if i == 1])  # Count first generation evals
 
-    if generation_size > 0:
+    # For Scipy DE: population = popsize × n_params (18 params)
+    # We need to infer generation_size from the data pattern
+    # Strategy: Find the first repeated objective pattern or estimate from total evals
+
+    # Simple heuristic: Check if iterations are multiples of common population sizes
+    # Common sizes for 18 params: 36 (popsize=2), 90 (popsize=5), 180 (popsize=10), 270 (popsize=15)
+    total_evals = len(iterations)
+    possible_gen_sizes = [36, 54, 90, 126, 144, 180, 216, 270]  # popsize 2,3,5,7,8,10,12,15
+
+    generation_size = 0
+    for size in possible_gen_sizes:
+        if total_evals % size == 0:
+            generation_size = size
+            break
+
+    # Fallback: if no match, assume single generation
+    if generation_size == 0:
+        generation_size = total_evals
+
+    if generation_size > 0 and generation_size < total_evals:
         print(f"Detected {generation_size} evaluations per generation")
         print()
         print("Best objective per generation:")

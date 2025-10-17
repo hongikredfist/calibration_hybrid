@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## CLAUDE.md Writing Rules
 
 ### Purpose
-- **CLAUDE.md**: For Claude Code (AI assistant) - Technical context, architecture, current status, next steps
+- **CLAUDE.md**: For Claude Code (AI assistant) - Current status, architecture, next steps (lean, recent focus)
 - **README.md**: For humans (users, developers) - Installation, usage instructions, how-to guides
+- **DEV_HISTORY.md**: Complete development journal - All decisions, bugs, changes (chronological archive)
 
 ### Language Policy
 - **CLAUDE.md**: English (technical precision, better AI comprehension)
@@ -39,10 +40,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Algorithm configurations
 - Exclude: obvious file structure, low-level class details
 
-**5. Development History** (Critical decisions and bugs)
+**5. Development History** (Recent critical items only)
+- Keep only last 30 days OR most recent 2-3 entries
 - Format: `YYYY-MM-DD: Title`
 - Include: Problem/Context, Solution/Rationale, Impact
-- Archive old entries after 10+ items
+- Move older entries to DEV_HISTORY.md (never delete)
+- Link to DEV_HISTORY.md for full history
 
 **6. Next Steps** (Actionable tasks)
 - Immediate next task
@@ -77,10 +80,17 @@ When user says **"update md"**, perform full session documentation:
 **2. Update CLAUDE.md**:
 - Current Status: Update phase, last session summary
 - Completed: Check off finished items, add dates
-- Development History: Add new entry if non-trivial bug/decision
+- Development History: Add new entry (keep only recent 2-3, move old to DEV_HISTORY.md)
 - Next Steps: Update immediate task
 - Development Commands: Add new workflows if any
 - Remove stale information
+
+**2.5. Update DEV_HISTORY.md**:
+- Add new entry at TOP (reverse chronological)
+- Format: YYYY-MM-DD: Title
+- Include: Full context, problem, solution, impact, files modified
+- Never delete old entries
+- This is permanent archive
 
 **3. Update README.md**:
 - 현재 상태: Update phase, recent updates
@@ -89,21 +99,50 @@ When user says **"update md"**, perform full session documentation:
 - Quick Reference: Keep commands current
 - Remove outdated troubleshooting
 
-**4. Quality Checks**:
+**3.5. Cleanup README.md** (Automatic trim):
+- **최근 업데이트**: Keep only last 3-5 items (remove old updates)
+- **상세 사용법**: Remove deprecated commands/options
+- **문제 해결**: Remove solved issues, keep only common recurring issues
+- **프로젝트 구조**: Update if changed, remove outdated paths
+- **Target**: README.md should stay ~300-350 lines (never >400)
+
+**4. Cleanup CLAUDE.md** (Automatic trim to prevent bloat):
+- **Completed sections**: Archive finished phases (move details to DEV_HISTORY.md if needed)
+  - Keep only current phase details
+  - Old phases: Single checkmark line only
+- **Development History**: Keep ONLY 2 most recent entries
+  - Move 3rd+ entries to DEV_HISTORY.md
+  - Each entry: Max 15 lines (Problem/Solution/Impact only)
+- **Next Steps**: Remove completed tasks
+  - Keep only pending and immediate next tasks
+  - Archive old "Future Work" if stale
+- **Examples/Code blocks**: Remove if outdated
+  - JSON schemas: Keep minimal examples only
+  - Commands: Keep only currently used workflows
+- **Target**: CLAUDE.md should stay ~400-500 lines (never >600)
+
+**5. Prepare for "follow" command**:
+- Ensure "Next Steps" in CLAUDE.md has clear immediate task
+- Verify "Last Session" summary is accurate (1-2 sentences)
+- Check all three docs are consistent
+- Next session "follow" should have zero confusion
+
+**6. Quality Checks**:
 - Language: CLAUDE.md (English), README.md (Korean)
 - No Korean in CLAUDE.md
 - No low-level details (line counts, code snippets)
 - No duplicate information between sections
 - No stale/outdated commands or paths
 - All examples tested and working
-- Next session can /init and immediately continue work
+- **File size**: CLAUDE.md <600 lines, README.md <400 lines
 
-**5. Final Verification**:
+**7. Final Verification**:
 - Current phase clearly stated
 - Last session captured (1-2 sentences)
 - Next task actionable with acceptance criteria
 - No rule violations (check Purpose, Structure, Language Policy)
-- Information sufficient for perfect follow-up session
+- Information sufficient for perfect "follow" continuation
+- **Token efficiency**: Lean enough for daily /init without waste
 
 ### Quality Checklist
 Before ending session, verify:
@@ -113,6 +152,62 @@ Before ending session, verify:
 - [ ] Bugs/decisions documented in History
 - [ ] Commands for next session present
 - [ ] No stale/outdated information
+
+### "follow" Command Protocol
+
+When user says **"follow"** at session start, perform comprehensive project analysis:
+
+**1. Read Core Documentation** (in order):
+- CLAUDE.md (current status, next steps, recent history)
+- README.md (verify user-facing accuracy)
+- DEV_HISTORY.md (skim recent 2-3 entries for context)
+
+**2. Extract Critical Information**:
+- **Current Phase**: From "Current Status" (e.g., "Phase 4B+ Complete")
+- **Current Task**: From "Current Task" line (e.g., "Production run ready")
+- **Last Session**: What was done (1-2 sentence summary)
+- **Next Steps**: Immediate task from "Next Steps" section
+- **Blockers**: Any prerequisites or issues mentioned
+
+**3. Verify Codebase Alignment** (spot check):
+- Key paths exist (Unity project, Python dev/, data/output/)
+- Recent output files exist if mentioned (best_parameters.json, history CSVs)
+- Git status if relevant (uncommitted changes warning)
+
+**4. Present Continuation Summary** (concise format):
+```
+📍 **Current State**
+- Phase: [phase name]
+- Last Session: [what was accomplished]
+- Status: [ready/blocked/in-progress]
+
+🎯 **Next Task**
+- Goal: [clear objective]
+- Command: [exact command to run]
+- Expected: [outputs, time estimate]
+- Prerequisite: [if any]
+
+📋 **Continuation Plan**
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+Ready to proceed? (yes/no)
+```
+
+**5. Execute with Approval**:
+- Wait for user confirmation
+- Use TodoWrite for multi-step tasks
+- Update documentation when complete
+
+**Critical Success Criteria**:
+- ✅ Can answer: "What phase are we in?"
+- ✅ Can answer: "What did last session accomplish?"
+- ✅ Can answer: "What's the next immediate task?"
+- ✅ Can provide: Exact command to continue work
+- ✅ Zero need for user to explain context
+
+**Goal**: Zero context loss, immediate productive continuation
 
 ---
 
@@ -142,7 +237,7 @@ Scipy Differential Evolution
 ### Core Workflow
 1. Python generates 18 SFM parameters within bounds
 2. Unity runs simulation comparing SFM agents vs real ATC trajectory data
-3. Python computes objective (mean error + 95th percentile + time growth penalty)
+3. Python computes objective (RMSE + 95th percentile + time growth + density)
 4. Optimization algorithm suggests next parameters
 5. Repeat until objective minimized
 
@@ -159,73 +254,44 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 ## Current Status
 
-**Phase**: Phase 4B Complete ✅
-**Current Task**: Production optimization ready
-**Last Session**: CLI refactoring (popsize+generations interface), seed reproducibility feature implemented. All Phase 4B work complete.
+**Phase**: Phase 4B+ Complete ✅ (Pre-Production Ready)
+**Current Task**: Production run ready (720 evals, ~2-3 days)
+**Last Session**: Documentation restructuring (DEV_HISTORY.md + "follow" protocol), grid optimization (40×40), objective function improvements. System production-ready, baseline remeasurement needed.
 
 ### Completed
 
-#### Phase 1: Data Pipeline ✅ (Complete)
-- [x] `load_simulation_results.py` - Load and parse Unity simulation_result.json
-- [x] Validate 18 parameters, display agent error statistics
-- [x] Unity → Python JSON communication verified
+- [x] **Phase 1**: Data Pipeline ✅
+- [x] **Phase 2**: Objective Function ✅
+- [x] **Phase 3**: Manual Optimization (archived) ✅
+- [x] **Phase 4B**: Optimizer Abstraction Layer ✅ (modular architecture, Unity automation)
 
-#### Phase 2: Objective Function ✅ (Complete)
-- [x] `evaluate_objective.py` - Compute objective from simulation results
-- [x] 3-metric formula: 50% MeanError + 30% Percentile95 + 20% TimeGrowthPenalty
-- [x] Baseline objective: 4.5932 (Unity default parameters)
-- [x] Compare mode for multiple results
-- [x] Baseline save/load feature (`--save-baseline`)
+#### Phase 4B+: Objective Function Enhancements ✅ (Complete - 2025-10-17)
+- [x] **Density Metric** - Macroscopic crowd behavior validation
+- [x] **RMSE Metric** - Changed from MAE (literature standard)
+- [x] **TimeGrowthPenalty Improvement** - Linear regression instead of first/last 25%
+- [x] **Generation Tracking** - CSV now includes generation column
+- [x] **Enhanced History Tracking** - Individual metrics in CSV
+- [x] **Seed Reproduction Commands** - Auto-print at completion
+- [x] **Baseline Remeasurement** - New baseline: 2.8254 (RMSE-based)
+- [x] **Auto-detect Latest Result** - evaluate_objective.py finds newest *_result.json
+- [x] **Unity DensityAnalyzer** - Grid-based spatial density tracking (40×40 grid, 2.5m cells)
+- [x] **Graph Bug Fix** - Generation size calculation corrected in analyze_history.py
+- [x] **Grid Resolution Optimization** - Upgraded from 10×10 (10m cells) to 40×40 (2.5m cells)
+- [x] **Documentation System** - DEV_HISTORY.md + "follow" protocol + auto-cleanup rules
 
-#### Phase 3: Manual Optimization ✅ (Complete)
-- [x] `generate_parameters.py` - Scipy Differential Evolution integration
-- [x] `export_to_unity.py` - Python dict → Unity JSON with validation
-- [x] Baseline parameter generation (`--baseline`)
-- [x] Manual optimization mode (user runs Unity manually each iteration)
-- [x] Optimization history tracking (CSV)
-- [x] History analysis with convergence plots (`--analyze`)
-- [x] Baseline auto-load and comparison
-- [x] **Bug fix**: Iteration counting (callback mechanism) - 2025-10-02
-- [x] Unity auto-stop Play mode after simulation
+### Next Steps
 
-#### Phase 4B: Optimizer Abstraction Layer ✅ (Complete - 2025-10-16)
-- [x] Architecture design (core/, optimizer/, analysis/ modules)
-- [x] `optimizer/base_optimizer.py` - Abstract interface for all algorithms
-- [x] `core/parameter_utils.py` - Parameter conversion utilities
-- [x] `core/unity_simulator.py` - Unity Editor automation with file trigger system
-- [x] `core/objective_function.py` - Evaluation logic (reusable)
-- [x] `core/history_tracker.py` - Optimization history tracking (extracted)
-- [x] `optimizer/scipy_de_optimizer.py` - Wrap existing Scipy DE code
-- [x] `analysis/analyze_history.py` - Analysis functions (extracted)
-- [x] `run_optimization.py` - Unified CLI with algorithm selection
-- [x] `Calibration_hybrid_AutomationController.cs` - Unity Editor automation with file trigger
-- [x] TESTING.md - Comprehensive test guide (5 steps)
-- [x] **Testing complete**: All 5 steps validated (Steps 2-5)
-- [x] **Bug fixes**: Scene path, .meta file warning, off-by-one error, simulation not stopping
-- [x] **Feature additions**: File trigger system, Input-Output 1:1 matching, unique history files, auto-analysis
-- [x] **Code cleanup**: Phase 3 archived, modular structure finalized
-- [x] **CLI refactoring**: Intuitive popsize+generations interface (2025-10-16)
-- [x] **Seed reproducibility**: Auto-generate and save random seeds for reproducibility (2025-10-16)
+**Immediate**: Production optimization (720 evals, ~2-3 days)
+1. Verify Unity Scene: DensityAnalyzer component has 40×40 grid
+2. Remeasure baseline: `python dev/evaluate_objective.py --save-baseline`
+3. Run optimization: `python dev/run_optimization.py --algorithm scipy_de`
+4. Analyze results and document for SCI paper
 
-### Next
+**Prerequisite**: Unity Editor open with Calibration_Hybrid.unity scene
 
-#### Production Optimization (Ready to start)
-- [ ] Run production optimization (720 evaluations, ~2-3 days)
-  - Recommended: `python dev/run_optimization.py --algorithm scipy_de`
-  - Alternative: `python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5` (1350 evals)
-  - Unity Editor must be open during execution
-  - Can run unattended after initial confirmation
-  - Specify seed only for reproducibility: `--seed 42`
-- [ ] Analyze convergence and parameter sensitivity
-- [ ] Compare with baseline (4.5932)
-- [ ] Document final calibrated parameters
-
-#### Future Work (Phase 5+)
-- [ ] Implement alternative algorithms (Bayesian, CMA-ES) for SCI paper comparison
-- [ ] Add resume capability for interrupted optimizations
-- [ ] Parallel simulation execution (if multiple Unity instances feasible)
-
-**Blocker**: None. System fully functional and tested.
+**Future**:
+- Alternative algorithms (Bayesian, CMA-ES) for SCI paper comparison
+- Resume capability for interrupted optimizations
 
 ---
 
@@ -355,340 +421,81 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
    - Utility for inspecting simulation data
    - Verbose mode and agent-specific views
 
-### JSON Data Formats
+### Data Exchange Format
 
-**Python → Unity** (parameters.json):
-```json
-{
-  "minimalDistance": 0.2,
-  "relaxationTime": 0.5,
-  "repulsionStrengthAgent": 1.2,
-  "repulsionRangeAgent": 5.0,
-  "lambdaAgent": 0.35,
-  "repulsionStrengthObs": 1.0,
-  "repulsionRangeObs": 5.0,
-  "lambdaObs": 0.35,
-  "k": 8.0,
-  "kappa": 5.0,
-  "obsK": 3.0,
-  "obsKappa": 0.0,
-  "considerationRange": 2.5,
-  "viewAngle": 150.0,
-  "viewAngleMax": 240.0,
-  "viewDistance": 5.0,
-  "rayStepAngle": 30.0,
-  "visibleFactor": 0.7,
-  "experimentId": "exp_20250115_103000_a1b2c3d4",
-  "timestamp": "2025-01-15T10:30:00"
-}
-```
-
-**Unity → Python** (eval_XXXX_result.json / simulation_result.json):
-```json
-{
-  "experimentId": "exp_20250115_103000_a1b2c3d4",
-  "startTime": "2025-01-15T10:30:00",
-  "endTime": "2025-01-15T10:35:42",
-  "executionTimeSeconds": 342.5,
-  "totalAgents": 100,
-  "actualAgents": 95,
-  "parameters": {
-    "minimalDistance": 0.2,
-    // ... all 18 parameters
-  },
-  "agentErrors": [
-    {
-      "agentId": 4236,
-      "timeErrors": [
-        {"timeIndex": 1, "error": 0.234},
-        {"timeIndex": 2, "error": 0.456}
-      ],
-      "meanError": 0.345,
-      "maxError": 0.678,
-      "percentile95": 0.612
-    }
-  ],
-  "avgFPS": 60.0,
-  "memoryUsageMB": 512
-}
-```
+**Python → Unity**: `eval_XXXX_parameters.json` (18 SFM params + experimentId + timestamp)
+**Unity → Python**: `eval_XXXX_result.json` (parameters + agentErrors[] + densityMetrics + metadata)
 
 ### Objective Function Formula
 
 **Objective** (lower is better):
 ```
-Objective = 0.50 × MeanError + 0.30 × Percentile95 + 0.20 × TimeGrowthPenalty
+Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × DensityDiff
 ```
 
 **Components**:
-1. **MeanError** (50% weight)
-   - Average trajectory error across all agents
-   - Primary metric: overall simulation accuracy
+1. **RMSE** (40% weight) - Root Mean Square Error
+   - Individual trajectory accuracy
+   - More sensitive to large errors than MAE (literature standard)
+   - Calculation: sqrt(mean([agent_mean_error²]))
 
-2. **Percentile95** (30% weight)
+2. **Percentile95** (25% weight)
    - 95th percentile of agent errors
    - Robustness: penalizes outliers without being overly sensitive
+   - Ignores worst 5% to prevent extreme outlier influence
 
-3. **TimeGrowthPenalty** (20% weight)
-   - Detects agents whose error grows over time (instability)
-   - Calculation: For each agent, compute slope of error vs time
-   - Penalty: Average positive slope (growing errors only)
+3. **TimeGrowthPenalty** (15% weight)
+   - Temporal stability measurement
+   - Calculation: Linear regression slope of error over time (scipy.stats.linregress)
+   - Only penalizes positive slopes (growing errors)
+   - Negative slopes (improving accuracy) = no penalty
 
-**Baseline**: 4.5932 (Unity default parameters)
+4. **DensityDifference** (20% weight) - NEW!
+   - Macroscopic crowd behavior validation
+   - Calculation: RMSE of agent density across 40×40 spatial grid (2.5m cells)
+   - Ensures crowd flow patterns match reality (not just individual trajectories)
+   - Cell size: 2.5m × 2.5m = 6.25m² (3-13 pedestrians per cell typical)
 
-### Optimization Algorithm Configuration
+**Baseline**: 2.8254 (Unity default parameters, RMSE-based)
+- Previous baseline (MAE-based): 4.5932
+- Change reflects RMSE + improved TimeGrowth + density metrics
 
-**Scipy Differential Evolution** - Population-based, gradient-free
+### Optimization Algorithm
 
-**Why DE**:
-- Unity simulation is black-box (no gradients available)
-- 18D continuous parameter space (DE optimal range: 10-40D)
-- Simple configuration (3-4 hyperparameters vs TuRBO's 15+)
-- 30+ years of proven robustness
-- Project philosophy: simplicity over cutting-edge complexity
+**Scipy Differential Evolution** - Population-based, gradient-free, 18D parameter space
 
-**Configuration**:
-```python
-scipy.optimize.differential_evolution(
-    objective_function,
-    bounds=[(min, max) for each of 18 params],
-    strategy='best1bin',      # Mutation strategy
-    maxiter=50,               # Generations
-    popsize=15,               # Population multiplier (NOT absolute size)
-    mutation=(0.5, 1.0),      # Default mutation factor range
-    recombination=0.7,        # Default crossover probability
-    callback=early_stop_callback  # Hard limit on evaluations
-)
-```
+**Key Settings**:
+- `popsize` = multiplier (NOT absolute size). Actual population = `popsize × 18`
+- Total evals = `popsize × 18 × generations`
+- Default: `popsize=10, generations=4` → 720 evals (~2-3 days)
 
-**IMPORTANT: Scipy popsize Behavior**:
-- `popsize` is a **multiplier**, not absolute population size
-- Actual population = `popsize × n_parameters = popsize × 18`
-- **Total evaluations** = `(popsize × 18) × generations`
-- Example: `popsize=10, generations=4` → 10×18×4 = 720 evaluations
-
-**Recommended Settings**:
-```bash
-# Default (balanced, recommended)
-python dev/run_optimization.py --algorithm scipy_de
-# → popsize=10, generations=4 → 720 evals
-
-# More exploration (larger population)
-python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
-# → 15×18×5 = 1350 evals
-
-# More convergence (more generations)
-python dev/run_optimization.py --algorithm scipy_de --popsize 8 --generations 8
-# → 8×18×8 = 1152 evals
-
-# Quick test
-python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
-# → 2×18×1 = 36 evals
-```
-
-**Theory Guidelines**:
-- Population size: 5N ~ 10N recommended (N=18 → 90~180 individuals)
-  - `popsize=5~10` is optimal range
-- Minimum generations: 3+ (1 gen = random search, no evolution)
-- No complex calculation needed - just set `--popsize` and `--generations`
-
-**Expected Runtime**: 1-3 days (5-10 min per simulation)
+**Usage**: See Development Commands section
 
 ---
 
 ## Development History
 
+**Recent Critical Entries** (Last 30 days):
+
+### 2025-10-17: Phase 4B+ Objective Function Enhancements
+
+**Problem**: Missing macroscopic validation, MAE vs RMSE, simple TimeGrowth calc, no generation tracking
+
+**Solution**: 8 enhancements - Density metric (40×40 grid), RMSE conversion, TimeGrowth linear regression, generation column, enhanced history, seed reproduction, auto-detect result, grid optimization
+
+**Impact**: Production-ready objective function with macroscopic validation (SCI paper ready)
+
 ### 2025-10-16: CLI Refactoring and Seed Reproducibility
 
-**Context**: User feedback on confusing `--max-evals` parameter and seed reproducibility concerns
+**Problem**: Non-intuitive CLI (`--max-evals` calculation), no seed reproducibility
 
-**Problem 1 - Non-intuitive CLI**:
-- Users had to manually calculate: `max-evals = popsize × 18 × generations`
-- Example: `--max-evals 720 --popsize 10` → user must know 720 = 10×18×4
-- Scipy's `popsize` as multiplier (not absolute size) was non-intuitive
-- `--seed 42` always used → no exploration diversity between runs
+**Solution**: Direct `--generations` parameter, auto-seed generation/saving, intuitive interface
 
-**Solution 1 - Direct generations Parameter**:
-```bash
-# Before (complex)
---max-evals 720 --popsize 10 --seed 42
-
-# After (intuitive)
---popsize 10 --generations 4
-# → auto-calculates: 10×18×4 = 720 evals
-```
-
-**Problem 2 - Seed Reproducibility**:
-- User concern: With `seed=None`, results non-reproducible
-- Scipy generates random seed internally but doesn't save it
-- No way to reproduce results without knowing seed value
-
-**Solution 2 - Auto-generate and Save Seed**:
-- Auto-generate random seed if None (0 to 2^31-1)
-- Store seed in `OptimizerResult.seed` field
-- Print reproduction command in console output
-- Save seed to result JSON file for later reference
-
-**Changes Made**:
-1. **New `--generations` parameter**: Direct control over evolution cycles (default: 4)
-2. **`--max-evals` now optional**: Only used as safety override (default: None)
-3. **`--seed` default None**: Random seed each run, auto-generated and saved
-4. **`--popsize` default 10** (was 15): More balanced for 18D problem (180 individuals/gen)
-5. **Auto-calculation**: `max_evals = popsize × n_params × generations` when not specified
-6. **Seed storage**: Added `seed` field to `OptimizerResult` and result JSON files
-7. **Seed reproduction guide**: Console prints exact command to reproduce results
-
-**Impact**:
-- ✅ Intuitive interface: Users think in DE concepts (10 individuals, 4 generations)
-- ✅ No mental math required for evaluation count
-- ✅ Seed diversity by default (auto-generated each run)
-- ✅ Full reproducibility: seed saved in result JSON and printed in console
-- ✅ Backward compatible: old `--max-evals` style still works
-
-### 2025-10-16: Phase 4B Refinements and Code Cleanup
-
-**Context**: After initial Phase 4B implementation and testing, several issues and improvements identified
-
-**Issues Fixed**:
-1. **File Trigger System** - Replaced subprocess mode with file trigger to avoid "Multiple instances" error
-2. **Unity .meta File Warning** - Added code to delete both .json and .meta files
-3. **Off-by-one Error** - 11th evaluation started when max-evals=10. Fixed by checking limit BEFORE evaluation
-4. **Simulation Not Stopping** - Optimization continued past limit. Fixed with proper early stopping
-5. **Input-Output Mismatch** - simulation_result.json (fixed name) vs eval_xxxx_parameters.json (unique). Implemented 1:1 matching
-
-**Features Added**:
-1. **File Trigger System** (default mode):
-   - Python writes `trigger_simulation.txt`
-   - Unity polls for trigger file via `[InitializeOnLoad]` static constructor
-   - Unity detects → deletes trigger → runs simulation
-   - Advantage: Unity Editor stays open (no 30s startup overhead)
-
-2. **Input-Output 1:1 Matching**:
-   - Modified `OutputManager.cs` to use experimentId from InputManager
-   - Dynamic filenames: `eval_0001_parameters.json` ↔ `eval_0001_result.json`
-   - Complete traceability for each evaluation
-
-3. **Unique History Files**:
-   - Format: `optimization_history_ScipyDE_pop5_best1bin_20251016_163602.csv`
-   - Includes algorithm name and timestamp
-   - Allows comparing different experiments without overwriting
-
-4. **Automatic Analysis**:
-   - Convergence plot auto-generated after optimization completes
-   - Baseline comparison in plots
-   - Summary statistics printed
-
-**Code Cleanup**:
-- Extracted `OptimizationHistory` class → `dev/core/history_tracker.py`
-- Extracted `analyze_optimization_history()` → `dev/analysis/analyze_history.py`
-- Moved `generate_parameters.py` → `archive/phase3/`
-- Created `archive/phase3/README.md` explaining manual mode
-- Organized test data: `archive/phase3_tests/` and `archive/phase4b_tests/`
-- Updated imports in `run_optimization.py` to use new module structure
-
-**Testing Complete**: All 5 steps from TESTING.md validated
-
-**Impact**: Production-ready automated system with clean modular architecture
-
-### 2025-10-15: Phase 4B Decision and Implementation
-
-**Context**: Preparing for SCI paper requiring algorithm comparison experiments
-
-**Decision**: Implement Phase 4B (Optimizer Abstraction) before Phase 4A (direct automation)
-
-**Rationale**:
-- SCI papers require comparative analysis of multiple optimization algorithms
-- Refactoring after Phase 4A would be 2-3x more difficult (codebase + results coupling)
-- Abstraction enables algorithm addition in 1-2 hours vs days of refactoring
-- Single responsibility principle: Unity execution, optimization, evaluation separated
-- Current code tightly coupled to Scipy DE (line 8, 296-310 in generate_parameters.py)
-
-**Architecture Implemented**:
-```
-dev/
-├─ run_optimization.py              # Unified CLI (algorithm-agnostic)
-├─ core/
-│   ├─ unity_simulator.py           # Unity Editor automation via -executeMethod
-│   ├─ objective_function.py        # Evaluation logic wrapper
-│   └─ parameter_utils.py           # Bounds, conversion utilities
-├─ optimizer/
-│   ├─ base_optimizer.py            # Abstract interface
-│   └─ scipy_de_optimizer.py        # Scipy DE implementation
-└─ Unity:
-    └─ Calibration_hybrid_AutomationController.cs  # Editor menu automation
-```
-
-**Key Components Created**:
-1. **BaseOptimizer** abstract class with `optimize() -> OptimizerResult` interface
-2. **UnitySimulator** encapsulates Editor automation (subprocess, polling, timeout)
-3. **ObjectiveFunction** wraps Unity execution + evaluation in callable
-4. **ScipyDEOptimizer** wraps existing DE logic from Phase 3
-5. **AutomationController** Unity Editor MenuItem for testing
-6. **TESTING.md** comprehensive 5-step test guide
-
-**Impact**:
-- Algorithm switching: Change `--algorithm scipy_de` CLI flag only
-- Future additions: Bayesian, CMA-ES, PSO in 1-2 hours each
-- Code reusability: 95% of Unity/evaluation logic shared across algorithms
-- Time investment: 8 hours implementation + 8 hours testing/refinement
-- **Status**: Complete and production-ready (2025-10-16)
-
-**Files Created**:
-- Python modules: `core/`, `optimizer/`, `analysis/` directories
-- Unity: `Calibration_hybrid_AutomationController.cs`
-- Documentation: `dev/TESTING.md`, `archive/phase3/README.md`
+**Impact**: User-friendly CLI + full reproducibility (seed saved in result JSON)
 
 ---
 
-## Next Steps
-
-### Immediate Task: Production Optimization
-
-**Goal**: Run full-scale optimization to find best 18 SFM parameters
-
-**Status**: Ready to start (Phase 4B complete, all tests passed)
-
-**Recommended Commands**:
-```bash
-# Default (balanced, recommended)
-python dev/run_optimization.py --algorithm scipy_de
-# → Uses default: popsize=10, generations=4 → 720 evals
-
-# Reproducible run (for experiments)
-python dev/run_optimization.py --algorithm scipy_de --seed 42
-
-# More exploration
-python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
-# → 1350 evals
-```
-
-**Prerequisites**:
-- Unity Editor must be open with `Calibration_Hybrid.unity` scene
-- Estimated time: ~2-3 days (720-810 evaluations × 5-10 min each)
-- Can run unattended after initial confirmation prompt
-
-**Expected Outputs**:
-- `data/output/best_parameters.json` - Best 18 SFM parameters found
-- `data/output/optimization_history_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.csv` - Full history
-- `data/output/optimization_history_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.png` - Convergence plot
-- `data/output/result_ScipyDE_pop10_best1bin_YYYYMMDD_HHMMSS.json` - Full result metadata
-
-**Success Criteria**:
-- Objective < 4.5932 (baseline)
-- Convergence visible in plot (diminishing improvements)
-- No Unity crashes or errors during optimization
-
-**After Production Run**:
-1. Analyze parameter sensitivity
-2. Validate calibrated parameters with held-out test data
-3. Document results for SCI paper
-4. Implement alternative algorithms (Bayesian, CMA-ES) for comparison
-
-**Blockers**: None
+**Full History**: See [DEV_HISTORY.md](DEV_HISTORY.md) for complete chronological record of all development decisions, bug fixes, and architectural changes since project start.
 
 ---
 
-## Development Philosophy
-
-**DO**: Standalone scripts, manual verification first, simple functions, incremental phases
-**DON'T**: Complex classes, premature automation, unnecessary features, emojis in code

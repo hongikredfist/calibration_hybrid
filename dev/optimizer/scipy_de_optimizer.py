@@ -147,8 +147,9 @@ class ScipyDEOptimizer(BaseOptimizer):
         print("=" * 80)
         print()
 
-        # Evaluation counter and termination flag
+        # Evaluation counter, generation tracker, and termination flag
         eval_counter = [0]
+        current_generation = [0]  # Track current generation number
         termination_flag = [False]
 
         # Objective function wrapper (counts evaluations and enforces limit)
@@ -156,12 +157,21 @@ class ScipyDEOptimizer(BaseOptimizer):
             eval_counter[0] += 1
             self.eval_count = eval_counter[0]
 
+            # Calculate current generation (1-indexed)
+            # Population size = popsize × n_params
+            population_size = self.popsize * len(self.bounds)
+            current_generation[0] = ((eval_counter[0] - 1) // population_size) + 1
+
             # Check if limit exceeded BEFORE running evaluation
             if eval_counter[0] > self.max_evaluations:
                 print(f"\n[Optimizer] Evaluation limit reached ({self.max_evaluations}), skipping eval {eval_counter[0]}")
                 termination_flag[0] = True
                 # Return large penalty to signal termination
                 return 1e10
+
+            # Pass generation number to objective function
+            if hasattr(self.objective_function, 'set_generation'):
+                self.objective_function.set_generation(current_generation[0])
 
             return self.objective_function(params)
 

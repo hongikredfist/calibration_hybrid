@@ -7,10 +7,12 @@ from datetime import datetime
 
 DEFAULT_UNITY_OUTPUT = r"D:\UnityProjects\META_VERYOLD_P01_s\Assets\StreamingAssets\Calibration\Output\simulation_result.json"
 
+# Objective function weights (must sum to 1.0)
 WEIGHTS = {
-    'mean_error': 0.50,
-    'percentile_95': 0.30,
-    'time_growth': 0.20
+    'mean_error': 0.40,       # Individual trajectory accuracy (reduced from 0.50)
+    'percentile_95': 0.25,    # Outlier control (reduced from 0.30)
+    'time_growth': 0.15,      # Temporal stability (reduced from 0.20)
+    'density_diff': 0.20      # Crowd-level density fidelity (NEW)
 }
 
 def load_simulation_result(filepath: str) -> Dict[str, Any]:
@@ -40,52 +42,44 @@ def compute_percentile_95(agent_errors: List[Dict[str, Any]]) -> float:
 
 def compute_time_growth_penalty(agent_errors: List[Dict[str, Any]]) -> float:
     """
-    Compute average error growth rate from early to late trajectory.
+    Compute average error growth rate using linear regression.
 
     For each agent:
-    - Compare first 25% of trajectory with last 25%
-    - Calculate growth rate: (late_mean - early_mean) / early_mean
-    - Only penalize positive growth (increasing error)
+    - Fit linear regression: error = slope × time + intercept
+    - Extract slope (rate of error growth per time step)
+    - Only penalize positive slopes (growing error over time)
 
     Returns:
-        Average growth rate across all agents (0 = no growth, 3.0 = 300% growth)
+        Average positive slope across all agents (higher = more unstable)
     """
     if not agent_errors:
         return 0.0
 
-    growth_rates = []
+    from scipy.stats import linregress
+
+    growth_slopes = []
 
     for agent in agent_errors:
         errors = agent.get('errors', [])
 
-        if len(errors) < 4:
+        if len(errors) < 4:  # Need at least 4 points for meaningful regression
             continue
 
-        # Split into quarters
-        quarter = len(errors) // 4
-        early_errors = errors[:quarter]
-        late_errors = errors[-quarter:]
+        # Extract error values and time indices
+        error_values = [e['error'] for e in errors]
+        time_indices = list(range(len(error_values)))
 
-        # Extract error values
-        early_values = [e['error'] for e in early_errors]
-        late_values = [e['error'] for e in late_errors]
+        # Linear regression: error = slope × time + intercept
+        slope, intercept, r_value, p_value, std_err = linregress(time_indices, error_values)
 
-        early_mean = np.mean(early_values)
-        late_mean = np.mean(late_values)
+        # Only penalize positive slopes (growing error)
+        # Negative slopes indicate improving accuracy over time (good!)
+        growth_slopes.append(max(0.0, slope))
 
-        # Calculate growth rate
-        if early_mean > 0.1:  # Avoid division by very small numbers
-            growth = (late_mean - early_mean) / early_mean
-        else:
-            growth = 0.0
-
-        # Only penalize growth (not improvement)
-        growth_rates.append(max(0.0, growth))
-
-    if not growth_rates:
+    if not growth_slopes:
         return 0.0
 
-    return np.mean(growth_rates)
+    return np.mean(growth_slopes)
 
 def get_top_growth_agents(agent_errors: List[Dict[str, Any]], top_n: int = 5) -> List[Tuple[int, float, float, float]]:
     """
@@ -129,11 +123,31 @@ def get_top_growth_agents(agent_errors: List[Dict[str, Any]], top_n: int = 5) ->
 
     return agent_growth_data[:top_n]
 
+def compute_density_difference(simulation_result: Dict[str, Any]) -> float:
+    """
+    Compute spatial density distribution difference (RMSE).
+
+    Compares empirical vs SFM agent density across spatial grid over time.
+    This provides macroscopic validation of crowd behavior patterns.
+
+    Args:
+        simulation_result: Parsed JSON data from Unity
+
+    Returns:
+        density_rmse: Density distribution RMSE (0 if no density data available)
+    """
+    # Check if density metrics are available (backward compatibility)
+    if 'densityMetrics' not in simulation_result or simulation_result['densityMetrics'] is None:
+        return 0.0
+
+    density_rmse = simulation_result['densityMetrics']['densityRMSE']
+    return density_rmse
+
 def evaluate_objective(simulation_result: Dict[str, Any]) -> Tuple[float, Dict[str, float]]:
     """
     Compute objective value from simulation result.
 
-    Objective = 0.50 * MeanError + 0.30 * Percentile95 + 0.20 * TimeGrowth
+    Objective = 0.40 * RMSE + 0.25 * Percentile95 + 0.15 * TimeGrowth + 0.20 * DensityDiff
     Lower value = better performance
 
     Args:
@@ -143,30 +157,42 @@ def evaluate_objective(simulation_result: Dict[str, Any]) -> Tuple[float, Dict[s
         objective: Single scalar value (lower = better)
         metrics: Dict of individual metric values for debugging
     """
-    # 1. MeanError (50%) - Overall average accuracy
-    mean_error = simulation_result['averageError']
+    # 1. RMSE (40%) - Individual trajectory accuracy (Root Mean Square Error)
+    # RMSE is more sensitive to large errors than MAE (literature standard)
+    agent_errors = simulation_result['agentErrors']
+    if agent_errors:
+        agent_mean_errors = [agent['meanError'] for agent in agent_errors]
+        mean_error = np.sqrt(np.mean([err ** 2 for err in agent_mean_errors]))
+    else:
+        mean_error = 0.0
 
-    # 2. Percentile95 (30%) - Prevent extreme outliers
+    # 2. Percentile95 (25%) - Prevent extreme outliers
     percentile_95 = compute_percentile_95(simulation_result['agentErrors'])
 
-    # 3. TimeGrowthPenalty (20%) - Ensure temporal stability
+    # 3. TimeGrowthPenalty (15%) - Ensure temporal stability
     time_growth = compute_time_growth_penalty(simulation_result['agentErrors'])
+
+    # 4. DensityDifference (20%) - Crowd-level density fidelity (NEW)
+    density_diff = compute_density_difference(simulation_result)
 
     # Weighted sum
     objective = (
         WEIGHTS['mean_error'] * mean_error +
         WEIGHTS['percentile_95'] * percentile_95 +
-        WEIGHTS['time_growth'] * time_growth
+        WEIGHTS['time_growth'] * time_growth +
+        WEIGHTS['density_diff'] * density_diff
     )
 
     metrics = {
         'mean_error': mean_error,
         'percentile_95': percentile_95,
         'time_growth': time_growth,
+        'density_diff': density_diff,
         'objective': objective,
         'weighted_mean': WEIGHTS['mean_error'] * mean_error,
         'weighted_p95': WEIGHTS['percentile_95'] * percentile_95,
-        'weighted_growth': WEIGHTS['time_growth'] * time_growth
+        'weighted_growth': WEIGHTS['time_growth'] * time_growth,
+        'weighted_density': WEIGHTS['density_diff'] * density_diff
     }
 
     return objective, metrics
@@ -183,7 +209,7 @@ def print_evaluation(simulation_result: Dict[str, Any], metrics: Dict[str, float
 
     print("METRICS BREAKDOWN:")
     print("-" * 80)
-    print(f"MeanError ({WEIGHTS['mean_error']:.0%}):          "
+    print(f"RMSE ({WEIGHTS['mean_error']:.0%}):               "
           f"{metrics['mean_error']:8.4f} m   →   "
           f"{metrics['weighted_mean']:8.4f} weighted")
     print(f"Percentile95 ({WEIGHTS['percentile_95']:.0%}):     "
@@ -192,6 +218,9 @@ def print_evaluation(simulation_result: Dict[str, Any], metrics: Dict[str, float
     print(f"TimeGrowthPenalty ({WEIGHTS['time_growth']:.0%}): "
           f"{metrics['time_growth']:8.4f}     →   "
           f"{metrics['weighted_growth']:8.4f} weighted")
+    print(f"DensityDifference ({WEIGHTS['density_diff']:.0%}): "
+          f"{metrics['density_diff']:8.4f}     →   "
+          f"{metrics['weighted_density']:8.4f} weighted")
     print()
     print(f"OBJECTIVE VALUE:      {metrics['objective']:8.4f}     (lower is better)")
     print("=" * 80)
@@ -304,14 +333,46 @@ def compare_evaluations(filepaths: List[str]):
           f"({(results[-1]['objective'] - results[0]['objective']) / results[-1]['objective'] * 100:.1f}%)")
     print()
 
+def find_latest_result_file(output_dir: str = None) -> str:
+    """
+    Find the most recently created *_result.json file.
+
+    Args:
+        output_dir: Directory to search (default: Unity StreamingAssets/Calibration/Output)
+
+    Returns:
+        Path to most recent result file
+
+    Raises:
+        FileNotFoundError: If no result files found
+    """
+    if output_dir is None:
+        output_dir = Path(DEFAULT_UNITY_OUTPUT).parent
+    else:
+        output_dir = Path(output_dir)
+
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Output directory not found: {output_dir}")
+
+    # Find all *_result.json files
+    result_files = list(output_dir.glob("*_result.json"))
+
+    if not result_files:
+        raise FileNotFoundError(f"No *_result.json files found in {output_dir}")
+
+    # Sort by modification time (most recent first)
+    result_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+    return str(result_files[0])
+
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluate objective function from Unity PIONA simulation results",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python dev/evaluate_objective.py
-  python dev/evaluate_objective.py --file path/to/result.json
+  python dev/evaluate_objective.py                              # Use latest result file
+  python dev/evaluate_objective.py --file path/to/result.json   # Use specific file
   python dev/evaluate_objective.py --verbose
   python dev/evaluate_objective.py --compare file1.json file2.json file3.json
         """
@@ -320,8 +381,8 @@ Examples:
     parser.add_argument(
         '--file', '-f',
         type=str,
-        default=DEFAULT_UNITY_OUTPUT,
-        help=f'Path to simulation_result.json (default: {DEFAULT_UNITY_OUTPUT})'
+        default=None,
+        help='Path to result JSON file (default: most recent *_result.json)'
     )
 
     parser.add_argument(
@@ -349,6 +410,17 @@ Examples:
         if args.compare:
             compare_evaluations(args.compare)
         else:
+            # Auto-detect latest file if not specified
+            if args.file is None:
+                try:
+                    args.file = find_latest_result_file()
+                    print(f"[Auto-detected] Using latest result file: {Path(args.file).name}")
+                    print()
+                except FileNotFoundError as e:
+                    print(f"ERROR: {e}")
+                    print("Please specify a file with --file option")
+                    return 1
+
             data = load_simulation_result(args.file)
             objective, metrics = evaluate_objective(data)
             print_evaluation(data, metrics, verbose=args.verbose)

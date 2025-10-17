@@ -39,13 +39,15 @@ class OptimizationHistory:
         self.output_path = Path(output_path)
         self.history = []
 
-        # Create CSV file with header
+        # Create CSV file with header (including individual metrics and generation)
         with open(self.output_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            header = ['iteration', 'timestamp', 'objective'] + PARAMETER_NAMES
+            header = ['iteration', 'generation', 'timestamp', 'objective',
+                      'mean_error', 'percentile_95', 'time_growth', 'density_diff'] + PARAMETER_NAMES
             writer.writerow(header)
 
-    def add_evaluation(self, iteration: int, objective: float, params: np.ndarray):
+    def add_evaluation(self, iteration: int, objective: float, params: np.ndarray,
+                      metrics: Dict[str, Any] = None, generation: int = 0):
         """
         Add evaluation result to history.
 
@@ -53,20 +55,34 @@ class OptimizationHistory:
             iteration: Evaluation iteration number
             objective: Objective value (lower is better)
             params: Parameter array (18 values)
+            metrics: Optional dict with individual metrics (mean_error, percentile_95, time_growth, density_diff)
+            generation: Generation number (0 if not applicable)
         """
         timestamp = datetime.now().isoformat()
         entry = {
             'iteration': iteration,
+            'generation': generation,
             'timestamp': timestamp,
             'objective': objective,
-            'params': params.tolist()
+            'params': params.tolist(),
+            'metrics': metrics
         }
         self.history.append(entry)
+
+        # Extract individual metrics (with defaults for backward compatibility)
+        if metrics is not None:
+            mean_error = metrics.get('mean_error', 0.0)
+            percentile_95 = metrics.get('percentile_95', 0.0)
+            time_growth = metrics.get('time_growth', 0.0)
+            density_diff = metrics.get('density_diff', 0.0)
+        else:
+            mean_error = percentile_95 = time_growth = density_diff = 0.0
 
         # Append to CSV
         with open(self.output_path, 'a', newline='') as f:
             writer = csv.writer(f)
-            row = [iteration, timestamp, objective] + params.tolist()
+            row = [iteration, generation, timestamp, objective,
+                   mean_error, percentile_95, time_growth, density_diff] + params.tolist()
             writer.writerow(row)
 
     def get_best(self) -> Dict[str, Any]:

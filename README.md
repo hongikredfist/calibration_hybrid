@@ -42,12 +42,19 @@ Python (결과 평가 → 새 파라미터)
 ## 현재 상태
 
 - [x] Phase 1: 데이터 파이프라인 검증 (완료)
-- [x] Phase 2: Objective Function 구현 (완료 - Baseline: 4.5932)
+- [x] Phase 2: Objective Function 구현 (완료)
 - [x] Phase 3: 최적화 알고리즘 연결 (완료 - 아카이브됨)
 - [x] **Phase 4B: Optimizer Abstraction Layer (완료 - 2025-10-16)**
   - ✅ 모듈화된 최적화 시스템 (core/, optimizer/, analysis/)
   - ✅ Unity Editor 완전 자동화 (파일 트리거 시스템)
   - ✅ 알고리즘 교체 가능한 구조 (SCI 논문 대비)
+- [x] **Phase 4B+: Objective Function 강화 (완료 - 2025-10-17)**
+  - ✅ 밀도 메트릭 추가 (군중 행동 검증)
+  - ✅ RMSE 메트릭 (문헌 표준)
+  - ✅ TimeGrowth 선형회귀 개선
+  - ✅ Generation 추적 기능
+  - ✅ 새 Baseline: **2.8254**
+- [ ] **Production Run: 720회 평가 (준비 완료 - 오늘 저녁 시작 예정)**
   - ✅ Input-Output 1:1 매칭 (완전한 추적 가능성)
   - ✅ 유니크 히스토리 파일 (실험 비교 용이)
   - ✅ 자동 분석 및 그래프 생성
@@ -55,9 +62,13 @@ Python (결과 평가 → 새 파라미터)
 
 **상태**: 프로덕션 최적화 준비 완료 (720 evaluations, ~2-3일 소요)
 
-**최근 업데이트 (2025-10-16)**:
-- ✅ CLI 인터페이스 개선 (`--popsize` + `--generations` 직관적 제어)
-- ✅ Seed 재현성 기능 (자동 생성된 시드 저장)
+**최근 업데이트 (2025-10-17)**:
+- ✅ 밀도 메트릭 추가 (군중 행동 검증 - SCI 논문 필수)
+  - 40×40 공간 그리드 (2.5m × 2.5m 셀, 최적 해상도)
+- ✅ RMSE 변경 (MAE → RMSE, 문헌 표준)
+- ✅ TimeGrowth 선형회귀 개선 (더 정확한 시간 안정성 측정)
+- ✅ Generation 추적 (CSV에 세대 번호 기록)
+- ✅ Baseline 재측정 필요 (그리드 해상도 변경으로 인해)
 
 ---
 
@@ -118,9 +129,10 @@ python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
 ### Step 4: 결과 확인
 최적화 완료 후 자동 생성된 파일들:
 - `data/output/best_parameters.json` - 최적 파라미터
-- `data/output/optimization_history_*.csv` - 최적화 히스토리
+- `data/output/optimization_history_*.csv` - 최적화 히스토리 (generation, 모든 메트릭 포함)
 - `data/output/optimization_history_*.png` - 수렴 그래프
-- `data/output/result_*.json` - 전체 결과
+- `data/output/result_*.json` - 전체 결과 (시드 포함)
+- 콘솔에 재현 명령어 자동 출력
 
 ---
 
@@ -197,9 +209,16 @@ python dev/evaluate_objective.py --compare result1.json result2.json
 
 **Objective Function** (Lower is better):
 ```
-Objective = 0.50 * MeanError + 0.30 * Percentile95 + 0.20 * TimeGrowth
-Baseline: 4.5932
+Objective = 0.40 * RMSE + 0.25 * Percentile95 + 0.15 * TimeGrowth + 0.20 * DensityDiff
 ```
+
+**메트릭 설명**:
+- **RMSE** (40%): 개별 궤적 정확도 (Root Mean Square Error, 문헌 표준)
+- **Percentile95** (25%): 이상치 제어 (하위 95% 에이전트 평균)
+- **TimeGrowth** (15%): 시간 안정성 (선형회귀 기울기)
+- **DensityDiff** (20%): 군중 밀도 일치도 (40×40 그리드, 2.5m 셀)
+
+**Baseline**: 재측정 필요 (이전: MAE 기반 4.5932)
 
 ### 아카이브: Phase 3 수동 모드
 

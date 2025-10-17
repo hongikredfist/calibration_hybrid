@@ -53,7 +53,17 @@ class ObjectiveFunction:
         self.verbose = verbose
 
         self.eval_count = 0
+        self.current_generation = 0  # Track current generation
         self.evaluations = []  # Store all evaluations
+
+    def set_generation(self, generation: int):
+        """
+        Set current generation number (called by optimizer).
+
+        Args:
+            generation: Current generation number (1-indexed)
+        """
+        self.current_generation = generation
 
     def __call__(self, params: np.ndarray) -> float:
         """
@@ -102,9 +112,10 @@ class ObjectiveFunction:
             print(f"EVALUATION {self.eval_count} - RESULTS")
             print(f"{'='*80}")
             print(f"Objective:      {objective:.4f}")
-            print(f"MeanError:      {metrics['mean_error']:.4f}")
+            print(f"RMSE:           {metrics['mean_error']:.4f}")
             print(f"Percentile95:   {metrics['percentile_95']:.4f}")
             print(f"TimeGrowth:     {metrics['time_growth']:.4f}")
+            print(f"DensityDiff:    {metrics['density_diff']:.4f}")
             print(f"{'='*80}\n")
 
         # Track history
@@ -121,7 +132,9 @@ class ObjectiveFunction:
             self.history.add_evaluation(
                 iteration=self.eval_count,
                 objective=objective,
-                params=params
+                params=params,
+                metrics=metrics,  # Pass individual metrics to history tracker
+                generation=self.current_generation  # Pass generation number
             )
 
         return objective
