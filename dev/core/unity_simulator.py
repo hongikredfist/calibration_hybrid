@@ -24,6 +24,7 @@ import sys
 import time
 import subprocess
 import glob
+import json
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -308,11 +309,15 @@ class UnitySimulator:
         check_interval = 2  # seconds
 
         while True:
-            # Check if result file created
+            # Check if result file created and stable (file size not changing)
             if self.result_file.exists():
-                elapsed = time.time() - start_time
-                print(f"[UnitySimulator] Result file created after {elapsed:.1f}s")
-                return
+                # Wait for file to stabilize (Unity still writing)
+                if self._is_file_stable(self.result_file):
+                    elapsed = time.time() - start_time
+                    print(f"[UnitySimulator] Result file created after {elapsed:.1f}s")
+                    return
+                else:
+                    print(f"[UnitySimulator] Result file exists but still being written...")
 
             # Check if Unity process crashed (subprocess mode only)
             if process is not None and process.poll() is not None:
@@ -342,6 +347,49 @@ class UnitySimulator:
 
             # Wait before next check
             time.sleep(check_interval)
+
+    def _is_file_stable(self, file_path: Path, stability_checks: int = 2, check_interval: float = 0.5) -> bool:
+        """
+        Check if file is stable (not being written to) by monitoring file size.
+
+        Args:
+            file_path: Path to file to check
+            stability_checks: Number of consecutive size checks that must match
+            check_interval: Time (seconds) between size checks
+
+        Returns:
+            True if file size is stable and content is valid JSON, False otherwise
+        """
+        try:
+            # Get initial file size
+            prev_size = file_path.stat().st_size
+
+            # Check file size stability
+            for _ in range(stability_checks):
+                time.sleep(check_interval)
+                current_size = file_path.stat().st_size
+
+                if current_size != prev_size:
+                    # File is still growing
+                    return False
+
+                prev_size = current_size
+
+            # File size is stable, now validate JSON integrity
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    json.load(f)
+                # JSON is valid
+                return True
+            except json.JSONDecodeError as e:
+                # JSON is corrupted (file might still be writing)
+                print(f"[UnitySimulator] WARNING: File exists but JSON invalid: {e}")
+                return False
+
+        except Exception as e:
+            # File access error (file might be locked by Unity)
+            print(f"[UnitySimulator] WARNING: Cannot check file stability: {e}")
+            return False
 
     def cleanup(self):
         """

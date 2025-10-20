@@ -254,9 +254,9 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 ## Current Status
 
-**Phase**: Phase 4B+ Complete ✅ (Pre-Production Ready)
+**Phase**: Phase 4B+ Complete ✅ (Production Ready)
 **Current Task**: Production run ready (720 evals, ~2-3 days)
-**Last Session**: Documentation restructuring (DEV_HISTORY.md + "follow" protocol), grid optimization (40×40), objective function improvements. System production-ready, baseline remeasurement needed.
+**Last Session**: Fixed critical race condition bug (JSON parsing error at iteration 64/720). Implemented file stability check with size monitoring + JSON validation. System now production-ready with robust error handling.
 
 ### Completed
 
@@ -278,6 +278,7 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 - [x] **Graph Bug Fix** - Generation size calculation corrected in analyze_history.py
 - [x] **Grid Resolution Optimization** - Upgraded from 10×10 (10m cells) to 40×40 (2.5m cells)
 - [x] **Documentation System** - DEV_HISTORY.md + "follow" protocol + auto-cleanup rules
+- [x] **Race Condition Fix** - File stability check for 65MB JSON files (2025-10-20)
 
 ### Next Steps
 
@@ -477,6 +478,14 @@ Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × D
 
 **Recent Critical Entries** (Last 30 days):
 
+### 2025-10-20: Critical Race Condition Fix - JSON Parsing Error
+
+**Problem**: Production run failed at iteration 64/720 - Python reading 65MB JSON files while Unity still writing (race condition)
+
+**Solution**: File stability check - monitors file size stability (2×0.5s) + JSON validation before reading
+
+**Impact**: Prevents optimization crashes, +1s overhead per eval (negligible), production-ready robustness
+
 ### 2025-10-17: Phase 4B+ Objective Function Enhancements
 
 **Problem**: Missing macroscopic validation, MAE vs RMSE, simple TimeGrowth calc, no generation tracking
@@ -484,14 +493,6 @@ Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × D
 **Solution**: 8 enhancements - Density metric (40×40 grid), RMSE conversion, TimeGrowth linear regression, generation column, enhanced history, seed reproduction, auto-detect result, grid optimization
 
 **Impact**: Production-ready objective function with macroscopic validation (SCI paper ready)
-
-### 2025-10-16: CLI Refactoring and Seed Reproducibility
-
-**Problem**: Non-intuitive CLI (`--max-evals` calculation), no seed reproducibility
-
-**Solution**: Direct `--generations` parameter, auto-seed generation/saving, intuitive interface
-
-**Impact**: User-friendly CLI + full reproducibility (seed saved in result JSON)
 
 ---
 

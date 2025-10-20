@@ -10,6 +10,84 @@ Complete chronological record of all technical decisions, bug fixes, and archite
 
 ---
 
+## 2025-10-20: Critical Race Condition Fix - JSON Parsing Error
+
+**Context**: Production optimization run failed at iteration 64/720 with JSON parsing error
+
+**Problem**:
+- Optimization failed with `JSONDecodeError: Expecting ',' delimiter: line 1319636 column 37 (char 47697920)`
+- File `eval_0064_result.json` was 65MB (very large due to 5008 agents + density data)
+- Python was reading file while Unity was still writing it (race condition)
+- File existed but was incomplete (47MB/65MB written when Python tried to read)
+
+**Root Cause**:
+```python
+# unity_simulator.py:312 (BEFORE)
+if self.result_file.exists():
+    return  # Immediate return without checking if file write is complete
+```
+
+**Technical Details**:
+- Unity writes 65MB JSON in ~1-2 seconds
+- Python checks `exists()` every 2 seconds
+- If check happens during write → file exists but incomplete
+- JSON parser reads truncated data → `JSONDecodeError`
+
+**Solution - File Stability Check**:
+1. Added `import json` for validation
+2. Implemented `_is_file_stable()` method with 2-stage verification:
+   - **Stage 1**: File size stability (2 checks, 0.5s interval)
+   - **Stage 2**: JSON validity (parse attempt)
+3. Modified `_wait_for_result()` to check stability before returning
+
+**Implementation**:
+```python
+def _is_file_stable(self, file_path, stability_checks=2, check_interval=0.5):
+    """Check if file is stable by monitoring size and validating JSON."""
+    prev_size = file_path.stat().st_size
+
+    # Check file size stability (2 consecutive checks)
+    for _ in range(stability_checks):
+        time.sleep(check_interval)
+        current_size = file_path.stat().st_size
+
+        if current_size != prev_size:
+            return False  # Still growing
+
+        prev_size = current_size
+
+    # Validate JSON integrity
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            json.load(f)
+        return True  # Complete and valid
+    except json.JSONDecodeError:
+        return False  # Corrupted or incomplete
+```
+
+**Why 65MB Files?**:
+- 5008 agents × ~100 timepoints × ~100 bytes/timepoint = ~50MB (trajectory data)
+- 40×40 density grid × timepoints × 2 layers = ~15MB (density snapshots)
+- Total: 65MB per simulation result
+
+**Files Modified**:
+- `dev/core/unity_simulator.py`:
+  - Added `import json` (line 27)
+  - Modified `_wait_for_result()` to call stability check (line 314)
+  - Added `_is_file_stable()` method (line 351-392)
+
+**Impact**:
+- ✅ Prevents race condition crashes in production runs
+- ✅ Zero data loss (waits for complete file)
+- ✅ Robust JSON validation before parsing
+- ⏱️ Minor overhead: +1 second per evaluation (720 evals → +12 min total, negligible)
+
+**Testing Status**: Fix implemented, awaiting production run validation
+
+**Related Issue**: Discovered during 720-eval production run preparation (iteration 64/720 crashed)
+
+---
+
 ## 2025-10-17: Grid Resolution Optimization Decision
 
 **Context**: Before 720-eval production run, user questioned if 10×10 grid was appropriate for density analysis

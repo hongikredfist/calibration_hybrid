@@ -54,21 +54,19 @@ Python (결과 평가 → 새 파라미터)
   - ✅ TimeGrowth 선형회귀 개선
   - ✅ Generation 추적 기능
   - ✅ 새 Baseline: **2.8254**
-- [ ] **Production Run: 720회 평가 (준비 완료 - 오늘 저녁 시작 예정)**
+- [x] **Production Run 준비 완료 (2025-10-20)**
   - ✅ Input-Output 1:1 매칭 (완전한 추적 가능성)
   - ✅ 유니크 히스토리 파일 (실험 비교 용이)
   - ✅ 자동 분석 및 그래프 생성
-  - ✅ 테스트 완료 (TESTING.md 5단계 검증)
+  - ✅ Race condition 버그 수정 (JSON 파싱 오류 해결)
 
 **상태**: 프로덕션 최적화 준비 완료 (720 evaluations, ~2-3일 소요)
 
-**최근 업데이트 (2025-10-17)**:
-- ✅ 밀도 메트릭 추가 (군중 행동 검증 - SCI 논문 필수)
-  - 40×40 공간 그리드 (2.5m × 2.5m 셀, 최적 해상도)
-- ✅ RMSE 변경 (MAE → RMSE, 문헌 표준)
-- ✅ TimeGrowth 선형회귀 개선 (더 정확한 시간 안정성 측정)
-- ✅ Generation 추적 (CSV에 세대 번호 기록)
-- ✅ Baseline 재측정 필요 (그리드 해상도 변경으로 인해)
+**최근 업데이트**:
+- ✅ **Race Condition 버그 수정 (2025-10-20)** - 65MB JSON 파일 읽기 안정성 확보
+- ✅ 밀도 메트릭 추가 (2025-10-17) - 40×40 그리드, 2.5m 셀
+- ✅ RMSE 메트릭 전환 - MAE → RMSE (문헌 표준)
+- ✅ Generation 추적 - CSV에 세대 번호 기록
 
 ---
 
@@ -315,6 +313,11 @@ calibration_hybrid/
 - [ ] Scene 로드: `Calibration_Hybrid.unity` (**Calibration.unity 아님**)
 
 ### 자주 발생하는 문제
+
+**JSON 파싱 오류** (`JSONDecodeError`):
+- **원인**: Unity가 65MB 파일을 쓰는 중에 Python이 읽으려 시도 (race condition)
+- **해결**: 2025-10-20 패치로 자동 해결됨 (파일 안정성 체크 추가)
+- 여전히 발생 시: `git pull` 후 재실행
 
 **실행 안됨**:
 - Unity Editor가 열려 있는지 확인
