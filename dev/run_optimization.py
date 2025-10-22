@@ -63,7 +63,7 @@ def load_checkpoint(checkpoint_path="data/output/checkpoint_latest.pkl"):
     return checkpoint
 
 
-def create_optimizer(args, bounds, objective_function, max_evaluations):
+def create_optimizer(args, bounds, objective_function, max_evaluations, checkpoint=None):
     """
     Factory function to create optimizer based on CLI arguments.
 
@@ -72,11 +72,16 @@ def create_optimizer(args, bounds, objective_function, max_evaluations):
         bounds: Parameter bounds
         objective_function: Objective function callable
         max_evaluations: Calculated max evaluations
+        checkpoint: Optional checkpoint dict for resume
 
     Returns:
         BaseOptimizer instance
     """
     if args.algorithm == 'scipy_de':
+        # Extract resume info from checkpoint
+        resume_eval = checkpoint.get('eval_counter', 0) if checkpoint else 0
+        resume_gen = checkpoint.get('generation', 0) if checkpoint else 0
+
         return ScipyDEOptimizer(
             bounds=bounds,
             objective_function=objective_function,
@@ -84,7 +89,9 @@ def create_optimizer(args, bounds, objective_function, max_evaluations):
             seed=args.seed,
             popsize=args.popsize,
             generations=args.generations,
-            strategy=args.strategy
+            strategy=args.strategy,
+            resume_eval_counter=resume_eval,
+            resume_generation=resume_gen
         )
     # Future algorithms:
     # elif args.algorithm == 'bayesian':
@@ -95,13 +102,14 @@ def create_optimizer(args, bounds, objective_function, max_evaluations):
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
 
 
-def save_results(result, output_dir: Path):
+def save_results(result, output_dir: Path, history_csv: Path = None):
     """
     Save optimization results to JSON file.
 
     Args:
         result: OptimizerResult object
         output_dir: Directory to save results
+        history_csv: Path to history CSV to extract true best result
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -113,8 +121,42 @@ def save_results(result, output_dir: Path):
     # Convert to JSON-serializable format
     result_dict = result.to_dict()
 
-    # Add parameter dictionary for readability
-    result_dict['best_params_dict'] = params_array_to_dict(result.best_params)
+    # Override with true best from history CSV (if available)
+    if history_csv and history_csv.exists():
+        import csv
+        with open(history_csv, 'r') as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        if rows:
+            # Find true best
+            best_row = min(rows, key=lambda r: float(r['objective']))
+            best_iteration = int(best_row['iteration'])
+            best_generation = int(best_row['generation'])
+            best_objective = float(best_row['objective'])
+
+            # Extract best parameters
+            from export_to_unity import PARAMETER_NAMES
+            best_params = [float(best_row[name]) for name in PARAMETER_NAMES]
+
+            # Override optimizer result with true best
+            result_dict['best_objective'] = best_objective
+            result_dict['best_params'] = best_params
+            result_dict['best_params_dict'] = params_array_to_dict(np.array(best_params))
+            result_dict['best_iteration'] = best_iteration
+            result_dict['best_generation'] = best_generation
+            result_dict['n_evaluations'] = len(rows)
+
+            # Add metrics from best evaluation
+            result_dict['best_metrics'] = {
+                'mean_error': float(best_row.get('mean_error', 0)),
+                'percentile_95': float(best_row.get('percentile_95', 0)),
+                'time_growth': float(best_row.get('time_growth', 0)),
+                'density_diff': float(best_row.get('density_diff', 0))
+            }
+    else:
+        # Fallback: use optimizer result as-is
+        result_dict['best_params_dict'] = params_array_to_dict(result.best_params)
 
     # Save
     with open(filepath, 'w') as f:
@@ -231,6 +273,7 @@ Examples:
             print("=" * 80)
             print(f"Algorithm:       {checkpoint['algorithm']}")
             print(f"Completed:       {checkpoint['eval_counter']}/{checkpoint['max_evaluations']}")
+            print(f"Generation:      {checkpoint.get('generation', 'N/A')}")
             print(f"Best so far:     {checkpoint['best_objective']:.4f}")
             print(f"Checkpoint time: {checkpoint['timestamp']}")
             print("=" * 80)
@@ -251,14 +294,15 @@ Examples:
             bounds = load_parameter_bounds()
             n_params = len(bounds)
 
-            # Calculate remaining evaluations
-            remaining_evals = checkpoint['max_evaluations'] - checkpoint['eval_counter']
-            max_evaluations = remaining_evals
+            # Keep original max_evaluations from checkpoint
+            max_evaluations = checkpoint['max_evaluations']
+            remaining_evals = max_evaluations - checkpoint['eval_counter']
             print(f"Remaining evaluations: {remaining_evals}\n")
 
-            # Restore random state
+            # Restore random state and seed
             np.random.set_state(checkpoint['random_state'])
-            print(f"Random state restored")
+            args.seed = checkpoint.get('seed', None)  # Restore original seed for logging
+            print(f"Random state restored (original seed: {args.seed})")
 
         except FileNotFoundError as e:
             print(f"ERROR: {e}")
@@ -278,6 +322,9 @@ Examples:
         else:
             # User-specified override
             max_evaluations = args.max_evals
+
+        # For normal mode, remaining = total
+        remaining_evals = max_evaluations
 
     # Print configuration
     print("=" * 80)
@@ -305,10 +352,14 @@ Examples:
     print("=" * 80)
     print()
 
-    # Confirm with user
-    estimated_time = max_evaluations * 7 / 60  # 7 minutes per eval average
-    print(f"Estimated time: {estimated_time:.1f} hours ({estimated_time/24:.1f} days)")
-    print(f"This will run {max_evaluations} Unity simulations automatically.")
+    # Confirm with user (use remaining_evals for time estimate)
+    estimated_time = remaining_evals * 7 / 60  # 7 minutes per eval average
+    if args.resume:
+        print(f"Estimated remaining time: {estimated_time:.1f} hours ({estimated_time/24:.1f} days)")
+        print(f"This will run {remaining_evals} more Unity simulations (total: {checkpoint['eval_counter']}/{max_evaluations}).")
+    else:
+        print(f"Estimated total time: {estimated_time:.1f} hours ({estimated_time/24:.1f} days)")
+        print(f"This will run {max_evaluations} Unity simulations automatically.")
     print(f"Unity Editor will remain open during optimization.")
     print()
 
@@ -370,18 +421,20 @@ Examples:
         obj_func.set_initial_best(checkpoint['best_params'], checkpoint['best_objective'])
         obj_func.set_eval_counter(checkpoint['eval_counter'])
 
-    # Create optimizer
-    optimizer = create_optimizer(args, bounds, obj_func, max_evaluations)
+    # Create optimizer (pass checkpoint for resume)
+    optimizer = create_optimizer(args, bounds, obj_func, max_evaluations, checkpoint if args.resume else None)
 
     # Run optimization
     try:
         result = optimizer.optimize()
 
-        # Save results
-        result_file = save_results(result, output_dir)
+        # Save results (with history CSV for accurate best)
+        result_file = save_results(result, output_dir, history_csv=history_path)
 
-        # Save best parameters separately
-        best_params_dict = params_array_to_dict(result.best_params)
+        # Save best parameters separately (extract from result_file to get corrected best)
+        with open(result_file, 'r') as f:
+            result_data = json.load(f)
+        best_params_dict = result_data['best_params_dict']
         best_params_file = output_dir / "best_parameters.json"
         with open(best_params_file, 'w') as f:
             json.dump(best_params_dict, f, indent=2)
@@ -399,17 +452,29 @@ Examples:
             print("You can manually analyze with:")
             print(f"  python dev/analysis/analyze_history.py {history_path}")
 
-        # Print summary
+        # Print summary (use corrected data from result_file)
         print("\n" + "=" * 80)
         print("OPTIMIZATION SUMMARY")
         print("=" * 80)
-        print(f"Algorithm:        {result.algorithm_name}")
-        print(f"Success:          {result.success}")
-        print(f"Best Objective:   {result.best_objective:.4f}")
-        print(f"Total Evaluations: {result.n_evaluations}")
-        print(f"Message:          {result.message}")
-        if result.seed is not None:
-            print(f"Random Seed:      {result.seed}")
+        print(f"Algorithm:         {result_data.get('algorithm_name', result.algorithm_name)}")
+        print(f"Success:           {result_data.get('success', result.success)}")
+        print(f"Best Objective:    {result_data.get('best_objective', result.best_objective):.4f}")
+        print(f"Best Iteration:    {result_data.get('best_iteration', 'N/A')}")
+        print(f"Best Generation:   {result_data.get('best_generation', 'N/A')}")
+        print(f"Total Evaluations: {result_data.get('n_evaluations', result.n_evaluations)}")
+        print(f"Message:           {result_data.get('message', result.message)}")
+        if result_data.get('seed') is not None:
+            print(f"Random Seed:       {result_data['seed']}")
+
+        # Print best metrics if available
+        if 'best_metrics' in result_data:
+            metrics = result_data['best_metrics']
+            print()
+            print("Best Metrics:")
+            print(f"  RMSE:         {metrics.get('mean_error', 0):.4f}")
+            print(f"  Percentile95: {metrics.get('percentile_95', 0):.4f}")
+            print(f"  TimeGrowth:   {metrics.get('time_growth', 0):.4f}")
+            print(f"  DensityDiff:  {metrics.get('density_diff', 0):.4f}")
         print()
         print("Files created:")
         print(f"  - Results:      {result_file}")

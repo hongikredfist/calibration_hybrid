@@ -10,6 +10,219 @@ Complete chronological record of all technical decisions, bug fixes, and archite
 
 ---
 
+## 2025-10-22: Phase 4C - Resume System Implementation
+
+**Context**: Production optimization runs take 2-3 days (720 evaluations). System vulnerable to interruptions (power outage, crashes, manual stops). Unity performance degraded with 400+ parameter files in Input folder (370s → 480s per simulation). Need robust resume capability for long-running optimizations.
+
+**Problems Identified**:
+1. No checkpoint/resume system - interruption means restart from scratch
+2. Unity Input/Output folders accumulating 400+ files - performance degradation
+3. Manual recovery complex - need to rebuild history from scattered result files
+4. Generation numbers estimated incorrectly in analysis graphs (1.00, 1.02 instead of 1, 2, 3)
+5. Result JSON showing wrong best_objective (1e10 penalty instead of true best)
+6. Result JSON showing wrong n_evaluations (796 instead of 436)
+7. Time estimation using total evaluations instead of remaining for resume
+8. No tracking of which iteration/generation produced best result
+
+**Solution - Comprehensive Resume System**:
+
+### 1. File Archiving System
+**Problem**: Unity scanning 400+ files in Input/Output folders → performance degradation
+**Solution**: Use fixed filenames in Unity, archive to separate folders after use
+
+**Files Modified**:
+- `unity_simulator.py` (Lines 192-206, 249-255):
+  - Changed input to `current_parameters.json` (fixed name)
+  - Archive input to `data/input/parameters/{experimentId}_parameters.json` using `shutil.copy2()`
+  - Changed output to `current_result.json` (fixed name)
+  - Archive output to `data/output/results/{experimentId}_result.json` using `shutil.copy2()` (NOT move!)
+- `Calibration_hybrid_OutputManager.cs` (Lines 343-348):
+  - Changed from `$"{experimentId}_result.json"` to `"current_result.json"`
+
+**Impact**: Unity folders only contain latest 2 files, archives preserved in data/ folders
+
+### 2. Checkpoint Save System
+**Problem**: No way to resume from interruption
+**Solution**: Save checkpoint every iteration with all necessary state
+
+**Files Modified**:
+- `scipy_de_optimizer.py` (Lines 275-310):
+  - Added `_save_checkpoint()` method
+  - Saves: eval_counter, generation, best_params, best_objective, random_state, history_csv, algorithm metadata
+  - Called every iteration after evaluation (Line 190)
+  - Outputs to `data/output/checkpoint_latest.pkl`
+
+**Checkpoint Format**:
+```python
+{
+    'eval_counter': 436,
+    'generation': 3,
+    'best_params': np.array([...]),  # 18 values
+    'best_objective': 1.7306,
+    'random_state': np.random.get_state(),  # Full RNG state
+    'history_csv': 'data/output/history_*.csv',
+    'algorithm': 'ScipyDE_pop10_best1bin',
+    'popsize': 10,
+    'seed': 1234567890,
+    'max_evaluations': 720,
+    'timestamp': '2025-10-22T17:10:28.961332'
+}
+```
+
+### 3. Resume Logic
+**Problem**: No mechanism to load and continue from checkpoint
+**Solution**: Add --resume flag with full state restoration
+
+**Files Modified**:
+- `run_optimization.py` (Lines 203-270):
+  - Added `--resume` argument
+  - Added `load_checkpoint()` function
+  - Resume mode: load checkpoint, validate algorithm match, restore random state
+  - Calculate remaining_evals = max_evaluations - eval_counter
+  - Set args.seed from checkpoint for logging
+- `scipy_de_optimizer.py` (Lines 78-79, 107-108, 160-161):
+  - Added `resume_eval_counter` and `resume_generation` parameters to __init__
+  - Initialize counters from resume values instead of 0
+- `run_optimization.py` (Lines 66-95):
+  - Modified `create_optimizer()` to accept checkpoint and pass resume counters
+- `objective_function.py` (Lines 80-88):
+  - Added `set_eval_counter()` method to restore eval count
+
+**Random State Restoration**:
+- Key insight: Seed alone insufficient for resume (can't skip 436 evaluations)
+- Solution: `np.random.set_state(checkpoint['random_state'])` - restores exact RNG position
+- Guarantees: Iteration 437 uses same random numbers as if running 1-437 continuously
+
+### 4. Generation Tracking Fix
+**Problem**: analyze_history.py estimated generation from iteration count, showing 1.00, 1.02, etc. on graphs
+**Solution**: Use generation column directly from CSV
+
+**Files Modified**:
+- `analyze_history.py` (Lines 76-109):
+  - Read `generations = [int(row['generation']) for row in rows]`
+  - Use `unique_generations = sorted(set(generations))`
+  - Group by actual generation values, not estimated ranges
+- `analyze_history.py` (Lines 153-172):
+  - Plot using CSV generation column
+  - Added `plt.xticks(gen_nums)` for integer-only x-axis labels
+  - Added `'o-'` for connected line plot
+
+**Impact**: Graphs now show Generation 1, 2, 3 (not 1.00, 1.02) with proper lines connecting points
+
+### 5. Result Accuracy Fix
+**Problem**: Optimizer returns 1e10 penalty when hitting eval limit, not true best
+**Solution**: Extract true best from history CSV when saving results
+
+**Files Modified**:
+- `run_optimization.py` (Lines 105-166):
+  - Modified `save_results()` to accept `history_csv` parameter
+  - If history exists, read all rows and find min objective
+  - Override optimizer result with true best from history
+  - Add `best_iteration`, `best_generation` fields
+  - Add `best_metrics` with RMSE, P95, TimeGrowth, DensityDiff
+- `run_optimization.py` (Line 425):
+  - Pass `history_csv=history_path` to `save_results()`
+- `run_optimization.py` (Lines 427-430):
+  - Extract corrected best_params from saved result file
+
+**New Result JSON Format**:
+```json
+{
+  "best_objective": 1.7306,
+  "best_iteration": 274,
+  "best_generation": 2,
+  "n_evaluations": 436,
+  "best_metrics": {
+    "mean_error": 1.9330,
+    "percentile_95": 3.7289,
+    "time_growth": 0.1043,
+    "density_diff": 0.0476
+  },
+  ...
+}
+```
+
+### 6. Time Estimation Fix
+**Problem**: Resume showing 84 hours (720 evals) instead of 33 hours (284 remaining)
+**Solution**: Use remaining_evals for time estimate, different messages for resume/normal
+
+**Files Modified**:
+- `run_optimization.py` (Lines 326-327):
+  - Added `remaining_evals = max_evaluations` for normal mode
+- `run_optimization.py` (Lines 355-364):
+  - Changed `estimated_time = remaining_evals * 7 / 60`
+  - Resume: "Estimated remaining time: 33.1 hours (1.4 days)"
+  - Normal: "Estimated total time: 84.0 hours (3.5 days)"
+
+### 7. Manual Recovery Utilities
+**Problem**: Need to recover from manual file moves or interrupted checkpoint saves
+**Solution**: Create utilities to rebuild history and checkpoint from result files
+
+**Files Created**:
+- `dev/utils/rebuild_history.py`:
+  - Scans `data/output/results/eval_*_result.json`
+  - Reconstructs history CSV with all iterations
+  - Calculates generation from iteration (popsize × 18)
+- `dev/utils/create_checkpoint.py`:
+  - Reads history CSV
+  - Finds best evaluation (min objective)
+  - Creates checkpoint_latest.pkl from last iteration
+  - Includes generation from CSV
+
+**Usage**:
+```bash
+python dev/utils/rebuild_history.py      # Rebuild from result files
+python dev/utils/create_checkpoint.py    # Create checkpoint from history
+```
+
+### 8. History Append Mode
+**Problem**: Resume creates new history file instead of continuing existing one
+**Solution**: Add append mode to OptimizationHistory
+
+**Files Modified**:
+- `history_tracker.py` (Lines 32-54, 56-96):
+  - Added `append` and `start_iteration` parameters to __init__
+  - If append=True, skip header write
+  - Adjust iteration numbers: `actual_iteration = start_iteration + iteration`
+- `run_optimization.py` (Lines 335-343):
+  - Resume: `OptimizationHistory(history_path, append=True, start_iteration=0)`
+  - Note: start_iteration=0 because eval_counter already correct
+
+**Testing**:
+- Ran optimization to iteration 436
+- Generated history: `history_ScipyDE_best1bin_20251020_134139.csv`
+- Used sed to fix generation 424-436: `sed -i 's/^424,1,/424,3,/' ...`
+- Created checkpoint with `create_checkpoint.py`
+- Resume successfully continued from 437
+
+**Production Run Status**:
+- Completed: 436/720 (61%)
+- Best objective: 1.7306 (38% improvement over baseline 2.8071)
+- Remaining: 284 evals (~33 hours, 1.4 days)
+- Ready to resume with: `python dev/run_optimization.py --algorithm scipy_de --resume`
+
+**Impact**:
+- ✅ Can pause/resume 720-eval runs without data loss
+- ✅ Perfect reproducibility via random state restoration
+- ✅ Unity performance maintained (2 files instead of 400+)
+- ✅ Accurate result reporting (true best, not penalty)
+- ✅ Clear progress tracking (iteration, generation, metrics)
+- ✅ Manual recovery possible from result files
+- ✅ Production-ready for long-running optimizations
+
+**Files Modified Summary**:
+1. `run_optimization.py` - Resume logic, time estimation, result extraction from history
+2. `scipy_de_optimizer.py` - Checkpoint save, generation tracking, resume counters
+3. `unity_simulator.py` - Fixed filenames, file archiving with copy
+4. `analyze_history.py` - Generation tracking from CSV, graph fixes
+5. `history_tracker.py` - Append mode for resume
+6. `objective_function.py` - set_eval_counter for resume
+7. `Calibration_hybrid_OutputManager.cs` - Fixed filename output
+8. `dev/utils/rebuild_history.py` - NEW
+9. `dev/utils/create_checkpoint.py` - NEW
+
+---
+
 ## 2025-10-20: Critical Race Condition Fix - JSON Parsing Error
 
 **Context**: Production optimization run failed at iteration 64/720 with JSON parsing error

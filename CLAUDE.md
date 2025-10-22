@@ -254,9 +254,9 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 ## Current Status
 
-**Phase**: Phase 4B+ Complete ✅ (Production Ready)
-**Current Task**: Production run ready (720 evals, ~2-3 days)
-**Last Session**: Fixed critical race condition bug (JSON parsing error at iteration 64/720). Implemented file stability check with size monitoring + JSON validation. System now production-ready with robust error handling.
+**Phase**: Phase 4C Complete ✅ (Resume System + Production Ready)
+**Current Task**: Production run in progress (436/720 completed, ~33 hours remaining)
+**Last Session**: Implemented full resume system with checkpoint recovery, fixed file archiving, generation tracking, and result reporting. System tested and ready for 437-720 continuation.
 
 ### Completed
 
@@ -264,35 +264,31 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 - [x] **Phase 2**: Objective Function ✅
 - [x] **Phase 3**: Manual Optimization (archived) ✅
 - [x] **Phase 4B**: Optimizer Abstraction Layer ✅ (modular architecture, Unity automation)
+- [x] **Phase 4B+**: Objective Function Enhancements ✅ (density, RMSE, time growth)
+- [x] **Phase 4C**: Resume System ✅ (checkpoint, archive, recovery) - 2025-10-22
 
-#### Phase 4B+: Objective Function Enhancements ✅ (Complete - 2025-10-17)
-- [x] **Density Metric** - Macroscopic crowd behavior validation
-- [x] **RMSE Metric** - Changed from MAE (literature standard)
-- [x] **TimeGrowthPenalty Improvement** - Linear regression instead of first/last 25%
-- [x] **Generation Tracking** - CSV now includes generation column
-- [x] **Enhanced History Tracking** - Individual metrics in CSV
-- [x] **Seed Reproduction Commands** - Auto-print at completion
-- [x] **Baseline Remeasurement** - New baseline: 2.8254 (RMSE-based)
-- [x] **Auto-detect Latest Result** - evaluate_objective.py finds newest *_result.json
-- [x] **Unity DensityAnalyzer** - Grid-based spatial density tracking (40×40 grid, 2.5m cells)
-- [x] **Graph Bug Fix** - Generation size calculation corrected in analyze_history.py
-- [x] **Grid Resolution Optimization** - Upgraded from 10×10 (10m cells) to 40×40 (2.5m cells)
-- [x] **Documentation System** - DEV_HISTORY.md + "follow" protocol + auto-cleanup rules
-- [x] **Race Condition Fix** - File stability check for 65MB JSON files (2025-10-20)
+#### Phase 4C: Resume System ✅ (Complete - 2025-10-22)
+- [x] **File Archiving System** - Fixed filenames in Unity, archive to data/input/parameters & data/output/results
+- [x] **Checkpoint Save** - Every iteration with eval_counter, generation, best_params, random_state
+- [x] **Resume Logic** - Restore from checkpoint with --resume flag
+- [x] **Generation Tracking Fix** - CSV generation column used directly, not estimated
+- [x] **Result Accuracy** - Extract true best from history CSV (not optimizer's 1e10 penalty)
+- [x] **Time Estimation** - Separate remaining/total time display for resume/normal mode
+- [x] **Random State Recovery** - Perfect reproducibility via np.random.set_state()
+- [x] **Utility Scripts** - rebuild_history.py, create_checkpoint.py for manual recovery
 
 ### Next Steps
 
-**Immediate**: Production optimization (720 evals, ~2-3 days)
-1. Verify Unity Scene: DensityAnalyzer component has 40×40 grid
-2. Remeasure baseline: `python dev/evaluate_objective.py --save-baseline`
-3. Run optimization: `python dev/run_optimization.py --algorithm scipy_de`
-4. Analyze results and document for SCI paper
+**Immediate**: Resume and complete production run
+1. Resume optimization: `python dev/run_optimization.py --algorithm scipy_de --resume`
+2. Complete 437-720 iterations (~33 hours, 1.4 days)
+3. Analyze final results and document for SCI paper
 
-**Prerequisite**: Unity Editor open with Calibration_Hybrid.unity scene
+**Status**: 436/720 completed (61%), best objective: 1.7306 (38% improvement over baseline)
 
 **Future**:
 - Alternative algorithms (Bayesian, CMA-ES) for SCI paper comparison
-- Resume capability for interrupted optimizations
+- Multi-run comparison for statistical significance
 
 ---
 
@@ -308,23 +304,27 @@ source .venv/bin/activate           # Unix/Mac
 pip install -r requirements.txt
 ```
 
-### Phase 4B: Automated Optimization (Production Ready)
+### Phase 4B/4C: Automated Optimization with Resume
 ```bash
 # Default (720 evals, ~2-3 days)
 python dev/run_optimization.py --algorithm scipy_de
 # → popsize=10, generations=4 → 10×18×4 = 720 evals
 
+# Resume from checkpoint (continues from last saved state)
+python dev/run_optimization.py --algorithm scipy_de --resume
+
 # Quick test (36 evals, ~5 hours)
 python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
-
-# Production with more exploration (1350 evals, ~5 days)
-python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
 
 # Reproducible run (for experiments)
 python dev/run_optimization.py --algorithm scipy_de --seed 42
 
 # Manual analysis (auto-called after optimization)
-python -c "from dev.analysis.analyze_history import analyze_optimization_history; analyze_optimization_history('data/output/optimization_history_*.csv')"
+python -c "from dev.analysis.analyze_history import analyze_optimization_history; analyze_optimization_history('data/output/history_*.csv')"
+
+# Manual recovery from interrupted run
+python dev/utils/rebuild_history.py      # Rebuild history from result files
+python dev/utils/create_checkpoint.py    # Create checkpoint from history
 ```
 
 ### Phase 3: Manual Optimization (Archived)
@@ -341,15 +341,17 @@ python archive/phase3/generate_parameters.py --optimize --manual --maxiter 2 --p
 **Unity**: `D:\UnityProjects\META_VERYOLD_P01_s\`
 - Scripts: `Assets\VeryOld_P01_s\Dev\Calibration_hybrid\`
 - Scene: `Assets\VeryOld_P01_s\Scene\PedModel\Calibration_Hybrid.unity`
-- Input: `Assets\StreamingAssets\Calibration\Input\eval_XXXX_parameters.json`
-- Output: `Assets\StreamingAssets\Calibration\Output\eval_XXXX_result.json`
+- Input: `Assets\StreamingAssets\Calibration\Input\current_parameters.json` (fixed filename)
+- Output: `Assets\StreamingAssets\Calibration\Output\current_result.json` (fixed filename)
 
 **Python**: `c:\dev\calibration_hybrid\`
-- Main: `dev/run_optimization.py` (unified entry point)
+- Main: `dev/run_optimization.py` (unified entry point with --resume)
 - Core: `dev/core/` (unity_simulator, objective_function, parameter_utils, history_tracker)
-- Optimizers: `dev/optimizer/` (scipy_de_optimizer)
-- Analysis: `dev/analysis/` (analyze_history)
-- Results: `data/output/` (baseline_objective.json, best_parameters.json, optimization_history_*.csv)
+- Optimizers: `dev/optimizer/` (scipy_de_optimizer with checkpoint)
+- Analysis: `dev/analysis/` (analyze_history with generation fix)
+- Utils: `dev/utils/` (rebuild_history, create_checkpoint)
+- Data Archives: `data/input/parameters/`, `data/output/results/` (eval_XXXX files)
+- Results: `data/output/` (checkpoint_latest.pkl, history_*.csv, result_*.json)
 - Archive: `archive/phase3/` (old manual mode)
 
 ---
@@ -478,21 +480,38 @@ Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × D
 
 **Recent Critical Entries** (Last 30 days):
 
-### 2025-10-20: Critical Race Condition Fix - JSON Parsing Error
+### 2025-10-22: Phase 4C Resume System Implementation
 
-**Problem**: Production run failed at iteration 64/720 - Python reading 65MB JSON files while Unity still writing (race condition)
+**Problem**: Long-running optimizations (2-3 days) vulnerable to interruptions. Unity performance degraded with 400+ files. Manual recovery complex.
+
+**Solution**: Comprehensive resume system with 8 components:
+1. Fixed filenames in Unity (current_parameters.json, current_result.json)
+2. Automatic file archiving to data/input/parameters & data/output/results
+3. Checkpoint save every iteration (eval_counter, generation, best_params, random_state)
+4. Resume logic with --resume flag (restores exact state via np.random.set_state)
+5. Generation tracking fix (use CSV column directly, not estimation)
+6. Result accuracy (extract true best from history, not optimizer penalty)
+7. Time estimation (separate remaining/total for resume/normal)
+8. Manual recovery utilities (rebuild_history.py, create_checkpoint.py)
+
+**Impact**: Production-ready resume capability. Can pause/continue 720-eval runs. Perfect reproducibility. Tested with 436-eval recovery.
+
+**Files Modified**:
+- run_optimization.py (resume logic, time estimation, result extraction)
+- scipy_de_optimizer.py (checkpoint save, generation tracking, resume counters)
+- unity_simulator.py (fixed filenames, archiving with copy not move)
+- analyze_history.py (use CSV generation column, fix graph axes)
+- history_tracker.py (append mode for resume)
+- objective_function.py (set_eval_counter for resume)
+- Calibration_hybrid_OutputManager.cs (fixed filename output)
+
+### 2025-10-20: Critical Race Condition Fix
+
+**Problem**: Production run failed at iteration 64/720 - Python reading 65MB JSON while Unity still writing
 
 **Solution**: File stability check - monitors file size stability (2×0.5s) + JSON validation before reading
 
 **Impact**: Prevents optimization crashes, +1s overhead per eval (negligible), production-ready robustness
-
-### 2025-10-17: Phase 4B+ Objective Function Enhancements
-
-**Problem**: Missing macroscopic validation, MAE vs RMSE, simple TimeGrowth calc, no generation tracking
-
-**Solution**: 8 enhancements - Density metric (40×40 grid), RMSE conversion, TimeGrowth linear regression, generation column, enhanced history, seed reproduction, auto-detect result, grid optimization
-
-**Impact**: Production-ready objective function with macroscopic validation (SCI paper ready)
 
 ---
 

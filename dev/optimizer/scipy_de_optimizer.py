@@ -74,7 +74,9 @@ class ScipyDEOptimizer(BaseOptimizer):
         mutation: Tuple[float, float] = (0.5, 1.0),
         recombination: float = 0.7,
         atol: float = 0.01,
-        tol: float = 0.01
+        tol: float = 0.01,
+        resume_eval_counter: int = 0,
+        resume_generation: int = 0
     ):
         """
         Initialize Scipy DE optimizer.
@@ -91,6 +93,8 @@ class ScipyDEOptimizer(BaseOptimizer):
             recombination: Crossover probability [0, 1]
             atol: Absolute tolerance for convergence
             tol: Relative tolerance for convergence
+            resume_eval_counter: Resume from this evaluation count (default: 0)
+            resume_generation: Resume from this generation number (default: 0)
         """
         super().__init__(bounds, objective_function, max_evaluations, seed)
 
@@ -100,6 +104,8 @@ class ScipyDEOptimizer(BaseOptimizer):
         self.recombination = recombination
         self.atol = atol
         self.tol = tol
+        self.resume_eval_counter = resume_eval_counter
+        self.resume_generation = resume_generation
 
         # Generate random seed if not provided (for reproducibility)
         if seed is None:
@@ -151,8 +157,8 @@ class ScipyDEOptimizer(BaseOptimizer):
         print()
 
         # Evaluation counter, generation tracker, and termination flag
-        eval_counter = [0]
-        current_generation = [0]  # Track current generation number
+        eval_counter = [self.resume_eval_counter]
+        current_generation = [self.resume_generation]  # Track current generation number
         termination_flag = [False]
         best_params = [None]
         best_objective = [float('inf')]
@@ -187,7 +193,7 @@ class ScipyDEOptimizer(BaseOptimizer):
                 best_objective[0] = result
 
             # Save checkpoint every iteration
-            self._save_checkpoint(eval_counter[0], best_params[0], best_objective[0])
+            self._save_checkpoint(eval_counter[0], best_params[0], best_objective[0], current_generation[0])
 
             return result
 
@@ -272,7 +278,7 @@ class ScipyDEOptimizer(BaseOptimizer):
         """
         return f"ScipyDE_pop{self.popsize}_{self.strategy}"
 
-    def _save_checkpoint(self, eval_counter: int, best_params: np.ndarray, best_objective: float):
+    def _save_checkpoint(self, eval_counter: int, best_params: np.ndarray, best_objective: float, generation: int = 0):
         """
         Save checkpoint after every evaluation.
 
@@ -280,6 +286,7 @@ class ScipyDEOptimizer(BaseOptimizer):
             eval_counter: Current evaluation number
             best_params: Best parameters found so far
             best_objective: Best objective value found so far
+            generation: Current generation number
         """
         if best_params is None:
             return  # Skip if no best solution yet
@@ -291,6 +298,7 @@ class ScipyDEOptimizer(BaseOptimizer):
 
         checkpoint = {
             'eval_counter': eval_counter,
+            'generation': generation,
             'best_params': best_params,
             'best_objective': best_objective,
             'random_state': np.random.get_state(),

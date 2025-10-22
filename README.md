@@ -48,6 +48,10 @@ Python (결과 평가 → 새 파라미터)
   - ✅ 모듈화된 최적화 시스템 (core/, optimizer/, analysis/)
   - ✅ Unity Editor 완전 자동화 (파일 트리거 시스템)
   - ✅ 알고리즘 교체 가능한 구조 (SCI 논문 대비)
+- [x] **Phase 4C: Resume System (완료 - 2025-10-22)**
+  - ✅ 체크포인트 기반 중단/재개 시스템
+  - ✅ 파일 아카이빙 (Unity 성능 유지)
+  - ✅ 정확한 결과 리포팅 (best iteration/generation 추적)
 - [x] **Phase 4B+: Objective Function 강화 (완료 - 2025-10-17)**
   - ✅ 밀도 메트릭 추가 (군중 행동 검증)
   - ✅ RMSE 메트릭 (문헌 표준)
@@ -60,13 +64,12 @@ Python (결과 평가 → 새 파라미터)
   - ✅ 자동 분석 및 그래프 생성
   - ✅ Race condition 버그 수정 (JSON 파싱 오류 해결)
 
-**상태**: 프로덕션 최적화 준비 완료 (720 evaluations, ~2-3일 소요)
+**상태**: 프로덕션 최적화 진행중 (436/720 완료, ~33시간 남음)
 
 **최근 업데이트**:
-- ✅ **Race Condition 버그 수정 (2025-10-20)** - 65MB JSON 파일 읽기 안정성 확보
-- ✅ 밀도 메트릭 추가 (2025-10-17) - 40×40 그리드, 2.5m 셀
-- ✅ RMSE 메트릭 전환 - MAE → RMSE (문헌 표준)
-- ✅ Generation 추적 - CSV에 세대 번호 기록
+- ✅ **Resume System 구현 (2025-10-22)** - 중단/재개 가능, 체크포인트 기반
+- ✅ **파일 아카이빙 (2025-10-22)** - Unity 성능 유지 (400+ 파일 문제 해결)
+- ✅ **결과 정확도 개선 (2025-10-22)** - best iteration/generation 추적
 
 ---
 
@@ -101,7 +104,9 @@ pip install -r requirements.txt
 - Scene 로드: `Calibration_Hybrid.unity`
 - **Unity Editor를 그대로 둔 채로 다음 단계 진행** (자동화됨)
 
-### Step 3: 자동 최적화 실행
+### Step 3: 자동 최적화 실행 (또는 재개)
+
+**새로 시작**:
 ```bash
 # 기본 실행 (720 evaluations, ~2-3일) - 가장 간단!
 python dev/run_optimization.py --algorithm scipy_de
@@ -111,6 +116,12 @@ python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
 
 # 더 많은 탐색 (1350 evaluations, ~5일)
 python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+```
+
+**중단된 최적화 재개**:
+```bash
+# 체크포인트에서 재개 (정확한 상태 복원)
+python dev/run_optimization.py --algorithm scipy_de --resume
 ```
 
 **자동으로 실행됨**:
@@ -127,10 +138,15 @@ python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
 ### Step 4: 결과 확인
 최적화 완료 후 자동 생성된 파일들:
 - `data/output/best_parameters.json` - 최적 파라미터
-- `data/output/optimization_history_*.csv` - 최적화 히스토리 (generation, 모든 메트릭 포함)
-- `data/output/optimization_history_*.png` - 수렴 그래프
-- `data/output/result_*.json` - 전체 결과 (시드 포함)
+- `data/output/history_*.csv` - 최적화 히스토리 (generation, 모든 메트릭 포함)
+- `data/output/history_*.png` - 수렴 그래프
+- `data/output/result_*.json` - 전체 결과 (best iteration/generation, 시드 포함)
+- `data/output/checkpoint_latest.pkl` - 체크포인트 (resume용)
 - 콘솔에 재현 명령어 자동 출력
+
+**아카이브** (자동 생성):
+- `data/input/parameters/` - 모든 입력 파라미터 저장 (eval_0001~eval_0720)
+- `data/output/results/` - 모든 결과 파일 저장 (eval_0001~eval_0720)
 
 ---
 

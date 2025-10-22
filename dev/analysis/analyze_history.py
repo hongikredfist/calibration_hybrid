@@ -76,6 +76,7 @@ def analyze_optimization_history(history_path: str):
     # Convert to numeric
     iterations = [int(row['iteration']) for row in rows]
     objectives = [float(row['objective']) for row in rows]
+    generations = [int(row['generation']) for row in rows]
 
     # Summary statistics
     print("=" * 80)
@@ -89,43 +90,21 @@ def analyze_optimization_history(history_path: str):
     print(f"Std objective:     {np.std(objectives):.4f}")
     print()
 
-    # Group by generation
-    max_iter = max(iterations)
+    # Group by generation (use CSV generation column)
+    unique_generations = sorted(set(generations))
 
-    # For Scipy DE: population = popsize × n_params (18 params)
-    # We need to infer generation_size from the data pattern
-    # Strategy: Find the first repeated objective pattern or estimate from total evals
-
-    # Simple heuristic: Check if iterations are multiples of common population sizes
-    # Common sizes for 18 params: 36 (popsize=2), 90 (popsize=5), 180 (popsize=10), 270 (popsize=15)
-    total_evals = len(iterations)
-    possible_gen_sizes = [36, 54, 90, 126, 144, 180, 216, 270]  # popsize 2,3,5,7,8,10,12,15
-
-    generation_size = 0
-    for size in possible_gen_sizes:
-        if total_evals % size == 0:
-            generation_size = size
-            break
-
-    # Fallback: if no match, assume single generation
-    if generation_size == 0:
-        generation_size = total_evals
-
-    if generation_size > 0 and generation_size < total_evals:
-        print(f"Detected {generation_size} evaluations per generation")
-        print()
+    if len(unique_generations) > 1:
         print("Best objective per generation:")
         print("-" * 80)
 
-        for gen in range(1, (max_iter // generation_size) + 2):
-            gen_start = (gen - 1) * generation_size + 1
-            gen_end = gen * generation_size
-            gen_objs = [objectives[i] for i, iter_num in enumerate(iterations)
-                       if gen_start <= iter_num <= gen_end]
+        for gen in unique_generations:
+            gen_objs = [objectives[i] for i, g in enumerate(generations) if g == gen]
+            gen_iters = [iterations[i] for i, g in enumerate(generations) if g == gen]
 
             if gen_objs:
                 best_gen_obj = min(gen_objs)
-                print(f"  Generation {gen:2d} (iter {gen_start:3d}-{gen_end:3d}): {best_gen_obj:.4f}")
+                best_gen_iter = gen_iters[gen_objs.index(best_gen_obj)]
+                print(f"  Generation {gen:2d} ({len(gen_objs):3d} evals): {best_gen_obj:.4f} (iter {best_gen_iter})")
 
         print()
 
@@ -171,18 +150,14 @@ def analyze_optimization_history(history_path: str):
         plt.grid(True, alpha=0.3)
         plt.legend()
 
-        # Plot best per generation
-        if generation_size > 0:
+        # Plot best per generation (use CSV generation column)
+        if len(unique_generations) > 1:
             plt.subplot(1, 2, 2)
             gen_bests = []
             gen_nums = []
 
-            for gen in range(1, (max_iter // generation_size) + 2):
-                gen_start = (gen - 1) * generation_size + 1
-                gen_end = gen * generation_size
-                gen_objs = [objectives[i] for i, iter_num in enumerate(iterations)
-                           if gen_start <= iter_num <= gen_end]
-
+            for gen in unique_generations:
+                gen_objs = [objectives[i] for i, g in enumerate(generations) if g == gen]
                 if gen_objs:
                     gen_bests.append(min(gen_objs))
                     gen_nums.append(gen)
@@ -194,6 +169,7 @@ def analyze_optimization_history(history_path: str):
             plt.title('Optimization Convergence - Best per Generation')
             plt.grid(True, alpha=0.3)
             plt.legend()
+            plt.xticks(gen_nums)  # Show only integer generation numbers
 
         plt.tight_layout()
 

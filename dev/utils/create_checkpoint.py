@@ -68,15 +68,18 @@ def create_checkpoint_from_history():
     # Last evaluation (checkpoint point)
     last_row = rows[-1]
     last_iteration = int(last_row['iteration'])
+    last_generation = int(last_row['generation'])
 
     print(f"\nCheckpoint will be created at:")
     print(f"  Last iteration: {last_iteration}")
+    print(f"  Last generation: {last_generation}")
     print(f"  Next iteration: {last_iteration + 1}")
     print(f"  Remaining:      {720 - last_iteration} evaluations")
 
     # Create checkpoint
     checkpoint = {
         'eval_counter': last_iteration,
+        'generation': last_generation,
         'best_params': best_params,
         'best_objective': best_objective,
         'random_state': np.random.get_state(),  # New random state
