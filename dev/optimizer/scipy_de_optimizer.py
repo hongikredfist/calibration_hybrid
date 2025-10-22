@@ -5,6 +5,9 @@ Wraps scipy.optimize.differential_evolution to conform to BaseOptimizer interfac
 """
 
 import numpy as np
+import pickle
+from pathlib import Path
+from datetime import datetime
 from scipy.optimize import differential_evolution
 from typing import Callable, List, Tuple, Optional
 
@@ -151,6 +154,8 @@ class ScipyDEOptimizer(BaseOptimizer):
         eval_counter = [0]
         current_generation = [0]  # Track current generation number
         termination_flag = [False]
+        best_params = [None]
+        best_objective = [float('inf')]
 
         # Objective function wrapper (counts evaluations and enforces limit)
         def objective_wrapper(params):
@@ -173,7 +178,18 @@ class ScipyDEOptimizer(BaseOptimizer):
             if hasattr(self.objective_function, 'set_generation'):
                 self.objective_function.set_generation(current_generation[0])
 
-            return self.objective_function(params)
+            # Evaluate objective
+            result = self.objective_function(params)
+
+            # Update best solution
+            if result < best_objective[0]:
+                best_params[0] = params.copy()
+                best_objective[0] = result
+
+            # Save checkpoint every iteration
+            self._save_checkpoint(eval_counter[0], best_params[0], best_objective[0])
+
+            return result
 
         # Callback to enforce evaluation limit (called after each generation)
         def callback(xk, convergence):
@@ -255,6 +271,42 @@ class ScipyDEOptimizer(BaseOptimizer):
         Example: "ScipyDE_pop15_best1bin"
         """
         return f"ScipyDE_pop{self.popsize}_{self.strategy}"
+
+    def _save_checkpoint(self, eval_counter: int, best_params: np.ndarray, best_objective: float):
+        """
+        Save checkpoint after every evaluation.
+
+        Args:
+            eval_counter: Current evaluation number
+            best_params: Best parameters found so far
+            best_objective: Best objective value found so far
+        """
+        if best_params is None:
+            return  # Skip if no best solution yet
+
+        # Get history CSV path from objective function
+        history_csv_path = None
+        if hasattr(self.objective_function, 'history') and self.objective_function.history:
+            history_csv_path = str(self.objective_function.history.output_path)
+
+        checkpoint = {
+            'eval_counter': eval_counter,
+            'best_params': best_params,
+            'best_objective': best_objective,
+            'random_state': np.random.get_state(),
+            'history_csv': history_csv_path,
+            'algorithm': self.get_algorithm_name(),
+            'popsize': self.popsize,
+            'seed': self.seed,
+            'max_evaluations': self.max_evaluations,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        checkpoint_path = Path("data/output/checkpoint_latest.pkl")
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(checkpoint_path, 'wb') as f:
+            pickle.dump(checkpoint, f)
 
 
 def test_scipy_de_optimizer():

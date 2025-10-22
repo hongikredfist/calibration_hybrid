@@ -25,6 +25,8 @@ Future algorithms:
 import argparse
 import json
 import sys
+import pickle
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 
@@ -36,6 +38,29 @@ from core.objective_function import ObjectiveFunction
 from core.parameter_utils import load_parameter_bounds, params_array_to_dict
 from core.history_tracker import OptimizationHistory
 from optimizer.scipy_de_optimizer import ScipyDEOptimizer
+
+
+def load_checkpoint(checkpoint_path="data/output/checkpoint_latest.pkl"):
+    """
+    Load checkpoint file.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+
+    Returns:
+        Dictionary with checkpoint data
+
+    Raises:
+        FileNotFoundError: If checkpoint file not found
+    """
+    path = Path(checkpoint_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+
+    with open(path, 'rb') as f:
+        checkpoint = pickle.load(f)
+
+    return checkpoint
 
 
 def create_optimizer(args, bounds, objective_function, max_evaluations):
@@ -167,6 +192,11 @@ Examples:
         default='data/output',
         help='Output directory for results (default: data/output)'
     )
+    parser.add_argument(
+        '--resume',
+        action='store_true',
+        help='Resume from latest checkpoint (data/output/checkpoint_latest.pkl)'
+    )
 
     # Scipy DE specific arguments
     parser.add_argument(
@@ -191,17 +221,63 @@ Examples:
 
     args = parser.parse_args()
 
-    # Initialize components
-    bounds = load_parameter_bounds()
-    n_params = len(bounds)
+    # Check for resume mode
+    if args.resume:
+        try:
+            checkpoint = load_checkpoint()
 
-    # Calculate max_evaluations
-    if args.max_evals is None:
-        # Auto-calculate from popsize × n_params × generations
-        max_evaluations = args.popsize * n_params * args.generations
+            print("=" * 80)
+            print("RESUMING FROM CHECKPOINT")
+            print("=" * 80)
+            print(f"Algorithm:       {checkpoint['algorithm']}")
+            print(f"Completed:       {checkpoint['eval_counter']}/{checkpoint['max_evaluations']}")
+            print(f"Best so far:     {checkpoint['best_objective']:.4f}")
+            print(f"Checkpoint time: {checkpoint['timestamp']}")
+            print("=" * 80)
+            print()
+
+            # Validation - check algorithm match
+            expected_algo = f"ScipyDE_pop{args.popsize}_{args.strategy}"
+            if checkpoint['algorithm'] != expected_algo:
+                print(f"WARNING: Algorithm mismatch!")
+                print(f"  Checkpoint: {checkpoint['algorithm']}")
+                print(f"  Current:    {expected_algo}")
+                response = input("Continue anyway? (y/n): ")
+                if response.lower() != 'y':
+                    print("Cancelled.")
+                    return
+
+            # Resume mode specific initialization
+            bounds = load_parameter_bounds()
+            n_params = len(bounds)
+
+            # Calculate remaining evaluations
+            remaining_evals = checkpoint['max_evaluations'] - checkpoint['eval_counter']
+            max_evaluations = remaining_evals
+            print(f"Remaining evaluations: {remaining_evals}\n")
+
+            # Restore random state
+            np.random.set_state(checkpoint['random_state'])
+            print(f"Random state restored")
+
+        except FileNotFoundError as e:
+            print(f"ERROR: {e}")
+            print("Cannot resume without checkpoint file.")
+            return
+
     else:
-        # User-specified override
-        max_evaluations = args.max_evals
+        # Normal mode (not resuming)
+        # Initialize components
+        bounds = load_parameter_bounds()
+        n_params = len(bounds)
+
+        # Calculate max_evaluations
+        if args.max_evals is None:
+            # Auto-calculate from popsize × n_params × generations
+            max_evaluations = args.popsize * n_params * args.generations
+        else:
+            # User-specified override
+            max_evaluations = args.max_evals
 
     # Print configuration
     print("=" * 80)
@@ -252,22 +328,34 @@ Examples:
         use_file_trigger=True
     )
 
-    # Create history tracker with unique filename
+    # Create history tracker with unique filename (or resume existing)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate unique history filename: optimization_history_{algorithm}_{timestamp}.csv
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if args.algorithm == 'scipy_de':
-        algorithm_name = f"ScipyDE_pop{args.popsize}_{args.strategy}"
+    if args.resume and checkpoint['history_csv']:
+        # Resume mode: use existing history CSV
+        history_path = Path(checkpoint['history_csv'])
+        history = OptimizationHistory(
+            str(history_path),
+            append=True,
+            start_iteration=0  # No offset needed - eval_counter already correct
+        )
+        print(f"History tracking: {history_path} (appending from eval {checkpoint['eval_counter']})")
     else:
-        algorithm_name = args.algorithm
+        # Normal mode: create new history file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if args.algorithm == 'scipy_de':
+            # Simplified filename: only algorithm + strategy (no popsize)
+            simplified_name = f"ScipyDE_{args.strategy}"
+        else:
+            simplified_name = args.algorithm
 
-    history_filename = f"optimization_history_{algorithm_name}_{timestamp}.csv"
-    history_path = output_dir / history_filename
+        history_filename = f"history_{simplified_name}_{timestamp}.csv"
+        history_path = output_dir / history_filename
 
-    history = OptimizationHistory(str(history_path))
-    print(f"History tracking: {history_path}")
+        history = OptimizationHistory(str(history_path))
+        print(f"History tracking: {history_path}")
+
     print()
 
     # Create objective function
@@ -276,6 +364,11 @@ Examples:
         history_tracker=history,
         verbose=True
     )
+
+    # Set initial best and eval counter if resuming
+    if args.resume and checkpoint:
+        obj_func.set_initial_best(checkpoint['best_params'], checkpoint['best_objective'])
+        obj_func.set_eval_counter(checkpoint['eval_counter'])
 
     # Create optimizer
     optimizer = create_optimizer(args, bounds, obj_func, max_evaluations)

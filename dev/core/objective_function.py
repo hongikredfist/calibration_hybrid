@@ -65,6 +65,28 @@ class ObjectiveFunction:
         """
         self.current_generation = generation
 
+    def set_initial_best(self, best_params: np.ndarray, best_objective: float):
+        """
+        Set initial best solution (for resume mode).
+
+        Args:
+            best_params: Best parameters from checkpoint
+            best_objective: Best objective value from checkpoint
+        """
+        self.initial_best_params = best_params
+        self.initial_best_objective = best_objective
+        print(f"[ObjectiveFunction] Initial best set: {best_objective:.4f}")
+
+    def set_eval_counter(self, start_count: int):
+        """
+        Set evaluation counter (for resume mode).
+
+        Args:
+            start_count: Starting evaluation number (e.g., 423)
+        """
+        self.eval_count = start_count
+        print(f"[ObjectiveFunction] Evaluation counter set to: {start_count}")
+
     def __call__(self, params: np.ndarray) -> float:
         """
         Evaluate objective function for given parameters.

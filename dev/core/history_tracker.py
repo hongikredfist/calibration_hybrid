@@ -29,22 +29,29 @@ class OptimizationHistory:
         best = history.get_best()
     """
 
-    def __init__(self, output_path: str):
+    def __init__(self, output_path: str, append: bool = False, start_iteration: int = 0):
         """
         Initialize history tracker.
 
         Args:
             output_path: Path to CSV file (will be created if doesn't exist)
+            append: If True, append to existing file (resume mode)
+            start_iteration: Starting iteration number (for resume)
         """
         self.output_path = Path(output_path)
         self.history = []
+        self.start_iteration = start_iteration
 
-        # Create CSV file with header (including individual metrics and generation)
-        with open(self.output_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            header = ['iteration', 'generation', 'timestamp', 'objective',
-                      'mean_error', 'percentile_95', 'time_growth', 'density_diff'] + PARAMETER_NAMES
-            writer.writerow(header)
+        if append and self.output_path.exists():
+            # Append mode: skip header, existing file preserved
+            print(f"[History] Appending to existing file: {output_path}")
+        else:
+            # New file mode: create with header
+            with open(self.output_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                header = ['iteration', 'generation', 'timestamp', 'objective',
+                          'mean_error', 'percentile_95', 'time_growth', 'density_diff'] + PARAMETER_NAMES
+                writer.writerow(header)
 
     def add_evaluation(self, iteration: int, objective: float, params: np.ndarray,
                       metrics: Dict[str, Any] = None, generation: int = 0):
@@ -52,15 +59,18 @@ class OptimizationHistory:
         Add evaluation result to history.
 
         Args:
-            iteration: Evaluation iteration number
+            iteration: Evaluation iteration number (relative if resuming)
             objective: Objective value (lower is better)
             params: Parameter array (18 values)
             metrics: Optional dict with individual metrics (mean_error, percentile_95, time_growth, density_diff)
             generation: Generation number (0 if not applicable)
         """
+        # Adjust iteration number for resume mode
+        actual_iteration = self.start_iteration + iteration
+
         timestamp = datetime.now().isoformat()
         entry = {
-            'iteration': iteration,
+            'iteration': actual_iteration,
             'generation': generation,
             'timestamp': timestamp,
             'objective': objective,
@@ -81,7 +91,7 @@ class OptimizationHistory:
         # Append to CSV
         with open(self.output_path, 'a', newline='') as f:
             writer = csv.writer(f)
-            row = [iteration, generation, timestamp, objective,
+            row = [actual_iteration, generation, timestamp, objective,
                    mean_error, percentile_95, time_growth, density_diff] + params.tolist()
             writer.writerow(row)
 

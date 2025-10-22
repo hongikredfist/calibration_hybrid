@@ -73,6 +73,10 @@ output/
 experiments/
 checkpoints/
 
+# Parameter and result archives (large files)
+data/input/parameters/
+data/output/results/
+
 # Claude support
 .claude/
 claude/

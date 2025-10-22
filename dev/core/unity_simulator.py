@@ -25,6 +25,7 @@ import time
 import subprocess
 import glob
 import json
+import shutil
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -186,9 +187,9 @@ class UnitySimulator:
         print(f"[UnitySimulator] Starting simulation: {experiment_id}")
         print(f"{'='*80}")
 
-        # Step 1: Export parameters to Unity JSON
+        # Step 1: Export parameters to Unity JSON (fixed filename)
         param_dict = params_array_to_dict(params)
-        input_file = self.input_dir / f"{experiment_id}_parameters.json"
+        input_file = self.input_dir / "current_parameters.json"  # Fixed filename for Unity
 
         export_to_unity_json(
             params=param_dict,
@@ -197,10 +198,19 @@ class UnitySimulator:
         )
         print(f"[UnitySimulator] Parameters exported: {input_file.name}")
 
-        # Set dynamic result file path for this evaluation
-        # This ensures Input-Output matching: eval_0001_parameters.json <-> eval_0001_result.json
-        self.result_file = self.output_dir / f"{experiment_id}_result.json"
+        # Archive input parameters to data/input/parameters/
+        archive_input_dir = Path("data/input/parameters")
+        archive_input_dir.mkdir(parents=True, exist_ok=True)
+        archive_input_file = archive_input_dir / f"{experiment_id}_parameters.json"
+        shutil.copy2(input_file, archive_input_file)
+        print(f"[UnitySimulator] Archived input: {archive_input_file}")
+
+        # Set result file path (fixed filename for Unity)
+        self.result_file = self.output_dir / "current_result.json"  # Fixed filename for Unity
         print(f"[UnitySimulator] Expected result file: {self.result_file.name}")
+
+        # Store experiment_id for later archiving
+        self.current_experiment_id = experiment_id
 
         # Step 2: Delete old result file (and .meta file if exists)
         if self.result_file.exists():
@@ -236,10 +246,19 @@ class UnitySimulator:
             process.terminate()
             process.wait(timeout=30)
 
+        # Step 6: Archive result file to data/output/results/
+        archive_result_dir = Path("data/output/results")
+        archive_result_dir.mkdir(parents=True, exist_ok=True)
+        archive_result_file = archive_result_dir / f"{self.current_experiment_id}_result.json"
+
+        shutil.copy2(str(self.result_file), str(archive_result_file))
+        print(f"[UnitySimulator] Archived result: {archive_result_file}")
+
         print(f"[UnitySimulator] Simulation complete: {experiment_id}")
         print(f"{'='*80}\n")
 
-        return str(self.result_file)
+        # Return archived file path (not Unity path)
+        return str(archive_result_file)
 
     def _trigger_unity_via_file(self) -> None:
         """
