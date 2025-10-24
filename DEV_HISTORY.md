@@ -10,6 +10,110 @@ Complete chronological record of all technical decisions, bug fixes, and archite
 
 ---
 
+## 2025-10-24: Phase 4D - Differential Evolution Configuration Analysis
+
+**Context**: Completed first production optimization run with 720 evaluations (popsize=10, generations=4). Expected to see convergence behavior typical of evolutionary algorithms, but results showed characteristics more similar to random sampling.
+
+**Problem Identified**:
+1. Poor convergence: Only 5 improvements in 720 evaluations (0.7% improvement rate)
+2. Best objective found at iteration 273 (Generation 2), no improvement in subsequent 447 evaluations
+3. Generation-wise statistics showed no consistent improvement trend:
+   - Gen 1 → Gen 2: Mean improved 3.32 → 2.84 (improvement)
+   - Gen 2 → Gen 3: Mean worsened 2.84 → 3.12 (degradation)
+   - Gen 3 → Gen 4: Mean improved 3.12 → 3.04 (minimal)
+4. User question: "Is this just random luck, not actual calibration?"
+
+**Root Cause Analysis**:
+
+Configuration used: popsize=10, generations=4 → 180 individuals × 4 generations = 720 evals
+
+The problem is **insufficient generations for evolutionary algorithm to work**:
+- Differential Evolution relies on iterative evolution: good individuals crossover/mutate → better offspring → population improves
+- With only 4 generations, population has no time to evolve toward optimum
+- Acts more like 720 random samples where best is selected
+
+**Literature Review**:
+- Storn & Price (1997) original DE paper: No explicit minimum generations stated
+- Primary recommendation: popsize = 10 × n_params (population size guideline)
+- Scipy default: maxiter = 1000 (problem-dependent, but much higher than 4)
+- Empirical consensus from optimization community: Minimum 10-20 generations needed for meaningful convergence, ideally 20-50+ for production
+
+**Data Analysis**:
+```python
+# Completed run statistics (popsize=10, gen=4):
+Total evaluations: 720
+Best objective: 1.7306 (iteration 273, Gen 2)
+Worst objective: 6.0059
+Mean objective: 3.0790
+Std objective: 0.7567
+
+Generation-wise best:
+Gen 1: 1.8443
+Gen 2: 1.7306 (best overall)
+Gen 3: 1.7673 (worse than Gen 2)
+Gen 4: 1.7626 (worse than Gen 2)
+
+Improvement rate: 5/720 = 0.7%
+```
+
+**Solution**:
+
+1. **Recommended configurations** (for same 720 eval budget):
+   ```python
+   popsize=4, generations=10  # 72 individuals × 10 gen = 720
+   # Allows more evolution cycles for convergence
+   ```
+
+2. **Ideal configurations** (longer runs):
+   ```python
+   # Moderate
+   popsize=5, generations=20  # 90 × 20 = 1800 (~7 days)
+
+   # Production
+   popsize=5, generations=40  # 90 × 40 = 3600 (~14 days)
+   ```
+
+3. **Configuration to AVOID**:
+   ```python
+   popsize=10, generations=4  # Too few generations, acts like random search
+   ```
+
+**Utilities Created**:
+
+1. **generate_result_from_history.py**:
+   - Extracts result JSON from completed history CSV
+   - Finds true best from history (not optimizer's penalty value)
+   - Usage: `python dev/utils/generate_result_from_history.py data/output/history_*.csv`
+
+2. **Result filename fix**:
+   - Changed result naming to match history CSV
+   - Before: `history_ScipyDE_best1bin_20251020_134139.csv` + `result_ScipyDE_pop10_best1bin_20251023_232446.json` (different timestamps)
+   - After: `history_ScipyDE_best1bin_20251020_134139.csv` + `result_ScipyDE_best1bin_20251020_134139.json` (matching)
+   - Easier to match results to runs
+
+**Impact**:
+- Current result (best=1.7306) is likely best of 720 random samples, not true optimization result
+- Need to re-run with proper configuration (popsize=4, gen=10) to verify actual optimization capability
+- Updated CLAUDE.md with DE configuration guidelines and literature basis
+- Created utilities for result extraction and analysis
+
+**Next Steps**:
+1. Re-run optimization: `python dev/run_optimization.py --algorithm scipy_de --popsize 4 --generations 10 --seed 42`
+2. Compare convergence behavior with previous run
+3. Document whether DE provides true optimization vs random sampling for this problem
+
+**Files Modified**:
+- `dev/run_optimization.py` (Lines 116-123: result filename matching)
+- `dev/utils/generate_result_from_history.py` (new file: 111 lines)
+- `CLAUDE.md` (Optimization Algorithm section, Development History, Next Steps)
+
+**Files Analyzed**:
+- `data/output/history_ScipyDE_best1bin_20251020_134139.csv` (720 rows, convergence analysis)
+- `data/output/result_ScipyDE_pop10_best1bin_20251023_232446.json` (old result)
+- `data/output/result_ScipyDE_best1bin_20251020_134139.json` (new result with matching name)
+
+---
+
 ## 2025-10-22: Phase 4C - Resume System Implementation
 
 **Context**: Production optimization runs take 2-3 days (720 evaluations). System vulnerable to interruptions (power outage, crashes, manual stops). Unity performance degraded with 400+ parameter files in Input folder (370s → 480s per simulation). Need robust resume capability for long-running optimizations.

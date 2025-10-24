@@ -254,9 +254,9 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 
 ## Current Status
 
-**Phase**: Phase 4C Complete ✅ (Resume System + Production Ready)
-**Current Task**: Production run in progress (436/720 completed, ~33 hours remaining)
-**Last Session**: Implemented full resume system with checkpoint recovery, fixed file archiving, generation tracking, and result reporting. System tested and ready for 437-720 continuation.
+**Phase**: Phase 4D - Algorithm Analysis & Configuration ✅
+**Current Task**: Identified DE configuration issue - need proper generation count for convergence
+**Last Session**: Completed 720-eval production run. Analyzed results revealing poor convergence (only 5 improvements in 720 evals). Root cause: 4 generations insufficient for DE evolution. Created result extraction utility. Fixed result filename matching to history CSV.
 
 ### Completed
 
@@ -277,16 +277,30 @@ All bounds defined in `export_to_unity.py:PARAMETER_BOUNDS`.
 - [x] **Random State Recovery** - Perfect reproducibility via np.random.set_state()
 - [x] **Utility Scripts** - rebuild_history.py, create_checkpoint.py for manual recovery
 
+#### Phase 4D: Algorithm Analysis & Configuration ✅ (Complete - 2025-10-24)
+- [x] **Production Run Complete** - 720 evals finished, best objective: 1.7306 (38% improvement)
+- [x] **Result Filename Fix** - Result JSON now matches history CSV name (history_XXX.csv → result_XXX.json)
+- [x] **Result Extraction Utility** - generate_result_from_history.py for extracting results from completed runs
+- [x] **Convergence Analysis** - Discovered poor convergence: only 5 improvements in 720 evals, best found at iteration 273
+- [x] **Root Cause Identified** - 4 generations insufficient for DE (popsize=10, gen=4), resembles random sampling
+
 ### Next Steps
 
-**Immediate**: Resume and complete production run
-1. Resume optimization: `python dev/run_optimization.py --algorithm scipy_de --resume`
-2. Complete 437-720 iterations (~33 hours, 1.4 days)
-3. Analyze final results and document for SCI paper
+**Immediate**: Re-run optimization with proper DE configuration
+1. Run with more generations for true convergence: `python dev/run_optimization.py --algorithm scipy_de --popsize 4 --generations 10 --seed 42`
+   - Same 720 evals (4×18×10 = 720)
+   - 10 generations allows evolution/convergence
+   - Compare with previous run (best=1.7306) to verify if it was just random luck
+2. Analyze convergence behavior (generation-wise improvement)
+3. Document findings for SCI paper
 
-**Status**: 436/720 completed (61%), best objective: 1.7306 (38% improvement over baseline)
+**Current Results** (popsize=10, gen=4):
+- 720 evals completed, best objective: 1.7306 (38% improvement over baseline 2.8254)
+- Best found at iteration 273 (Gen 2), no improvement in subsequent 447 evals
+- Only 5 total improvements in 720 evals (0.7%) - resembles random sampling
 
 **Future**:
+- Longer run with proper generations (e.g., popsize=5, gen=20 = 1800 evals)
 - Alternative algorithms (Bayesian, CMA-ES) for SCI paper comparison
 - Multi-run comparison for statistical significance
 
@@ -321,6 +335,9 @@ python dev/run_optimization.py --algorithm scipy_de --seed 42
 
 # Manual analysis (auto-called after optimization)
 python -c "from dev.analysis.analyze_history import analyze_optimization_history; analyze_optimization_history('data/output/history_*.csv')"
+
+# Extract result JSON from completed history CSV
+python dev/utils/generate_result_from_history.py data/output/history_ScipyDE_best1bin_YYYYMMDD_HHMMSS.csv
 
 # Manual recovery from interrupted run
 python dev/utils/rebuild_history.py      # Rebuild history from result files
@@ -470,7 +487,26 @@ Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × D
 **Key Settings**:
 - `popsize` = multiplier (NOT absolute size). Actual population = `popsize × 18`
 - Total evals = `popsize × 18 × generations`
-- Default: `popsize=10, generations=4` → 720 evals (~2-3 days)
+- **IMPORTANT**: Generations must be sufficient for evolution (minimum 10+, ideally 20-50)
+
+**Recommended Configurations**:
+```python
+# Quick test (720 evals, ~2-3 days)
+popsize=4, generations=10  # 72 individuals × 10 gen = 720
+
+# Moderate run (1800 evals, ~7 days)
+popsize=5, generations=20  # 90 individuals × 20 gen = 1800
+
+# Production run (3600 evals, ~14 days)
+popsize=5, generations=40  # 90 individuals × 40 gen = 3600
+```
+
+**AVOID**: `popsize=10, generations=4` - too few generations for convergence (resembles random sampling)
+
+**Literature Basis**:
+- Storn & Price (1997): Recommend popsize = 10×n_params (scipy default)
+- No explicit minimum generations, but empirically 10-50 needed for convergence
+- Scipy default maxiter = 1000 (problem-dependent)
 
 **Usage**: See Development Commands section
 
@@ -479,6 +515,36 @@ Objective = 0.40 × RMSE + 0.25 × Percentile95 + 0.15 × TimeGrowth + 0.20 × D
 ## Development History
 
 **Recent Critical Entries** (Last 30 days):
+
+### 2025-10-24: Phase 4D - DE Configuration Analysis & Result Utilities
+
+**Problem**: Completed 720-eval production run showed poor convergence - only 5 improvements total, best found at iteration 273 (Gen 2) with no subsequent improvement in 447 evals. Suspected insufficient generations for DE evolution.
+
+**Analysis**:
+- Configuration: popsize=10, generations=4 (180 individuals × 4 generations)
+- Generation-wise best: Gen1=1.8443, Gen2=1.7306, Gen3=1.7673, Gen4=1.7626
+- Only Gen1→Gen2 showed improvement (-6.16%), subsequent generations stagnant
+- 0.7% improvement rate (5/720) resembles random sampling, not optimization
+
+**Root Cause**: DE requires multiple generations for evolution (crossover/mutation of good individuals). 4 generations insufficient - no time for population to evolve toward optimum.
+
+**Literature Review**:
+- Storn & Price (1997): No explicit minimum generations stated
+- Scipy default: maxiter=1000 (problem-dependent)
+- Empirical consensus: Minimum 10-20 generations for meaningful convergence
+
+**Solution**:
+1. Recommend popsize=4, generations=10 (same 720 evals, better convergence)
+2. Long-term: popsize=5, generations=20+ for production runs
+3. Created generate_result_from_history.py utility for result extraction
+4. Fixed result filename to match history CSV (history_XXX.csv → result_XXX.json)
+
+**Impact**: Need to re-run optimization with proper generation count. Previous result (best=1.7306) likely random luck, not true optimization.
+
+**Files Modified**:
+- run_optimization.py (result filename matching)
+- dev/utils/generate_result_from_history.py (new utility)
+- CLAUDE.md (DE configuration guidelines)
 
 ### 2025-10-22: Phase 4C Resume System Implementation
 

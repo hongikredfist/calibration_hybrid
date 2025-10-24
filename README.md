@@ -52,24 +52,19 @@ Python (결과 평가 → 새 파라미터)
   - ✅ 체크포인트 기반 중단/재개 시스템
   - ✅ 파일 아카이빙 (Unity 성능 유지)
   - ✅ 정확한 결과 리포팅 (best iteration/generation 추적)
-- [x] **Phase 4B+: Objective Function 강화 (완료 - 2025-10-17)**
-  - ✅ 밀도 메트릭 추가 (군중 행동 검증)
-  - ✅ RMSE 메트릭 (문헌 표준)
-  - ✅ TimeGrowth 선형회귀 개선
-  - ✅ Generation 추적 기능
-  - ✅ 새 Baseline: **2.8254**
-- [x] **Production Run 준비 완료 (2025-10-20)**
-  - ✅ Input-Output 1:1 매칭 (완전한 추적 가능성)
-  - ✅ 유니크 히스토리 파일 (실험 비교 용이)
-  - ✅ 자동 분석 및 그래프 생성
-  - ✅ Race condition 버그 수정 (JSON 파싱 오류 해결)
+- [x] **Phase 4D: 알고리즘 분석 및 설정 최적화 (완료 - 2025-10-24)**
+  - ✅ 720회 프로덕션 실행 완료 (best: 1.7306, 38% 개선)
+  - ✅ 수렴 분석: 4세대는 불충분 (랜덤 샘플링과 유사)
+  - ✅ DE 설정 가이드라인 수립 (최소 10+ 세대 필요)
+  - ✅ 결과 추출 유틸리티 생성
+  - ✅ 결과 파일명 매칭 (history CSV와 동일)
 
-**상태**: 프로덕션 최적화 진행중 (436/720 완료, ~33시간 남음)
+**상태**: 적절한 DE 설정으로 재실행 필요 (popsize=4, gen=10)
 
 **최근 업데이트**:
-- ✅ **Resume System 구현 (2025-10-22)** - 중단/재개 가능, 체크포인트 기반
-- ✅ **파일 아카이빙 (2025-10-22)** - Unity 성능 유지 (400+ 파일 문제 해결)
-- ✅ **결과 정확도 개선 (2025-10-22)** - best iteration/generation 추적
+- ✅ **DE 설정 분석 (2025-10-24)** - 4세대로는 진화 불충분, 10+ 세대 필요
+- ✅ **결과 추출 도구 (2025-10-24)** - generate_result_from_history.py 생성
+- ✅ **파일명 매칭 개선 (2025-10-24)** - result 파일이 history CSV와 동일한 이름 사용
 
 ---
 
@@ -108,14 +103,19 @@ pip install -r requirements.txt
 
 **새로 시작**:
 ```bash
-# 기본 실행 (720 evaluations, ~2-3일) - 가장 간단!
-python dev/run_optimization.py --algorithm scipy_de
+# ⚠️ 권장 설정 (720 evaluations, ~2-3일)
+python dev/run_optimization.py --algorithm scipy_de --popsize 4 --generations 10
+# → 72개체 × 10세대 = 720회 평가 (적절한 수렴)
 
 # 빠른 테스트 (36 evaluations, ~5시간)
 python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
 
-# 더 많은 탐색 (1350 evaluations, ~5일)
-python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
+# 중간 실험 (1800 evaluations, ~7일)
+python dev/run_optimization.py --algorithm scipy_de --popsize 5 --generations 20
+
+# ❌ 권장하지 않음 (수렴 불충분)
+# python dev/run_optimization.py --algorithm scipy_de --popsize 10 --generations 4
+# → 세대 수가 너무 적어 진화 효과 없음 (랜덤 샘플링과 유사)
 ```
 
 **중단된 최적화 재개**:
@@ -160,17 +160,21 @@ python dev/run_optimization.py --algorithm scipy_de --resume
 ```bash
 # Unity Editor 열어둔 상태에서 실행
 
-# 기본 실행 (가장 간단, 권장)
-python dev/run_optimization.py --algorithm scipy_de
-# → popsize=10, generations=4 → 720 evals
+# ⚠️ 권장 설정 (적절한 수렴)
+python dev/run_optimization.py --algorithm scipy_de --popsize 4 --generations 10
+# → 72개체 × 10세대 = 720 evals (~2-3일)
 
 # 빠른 테스트
 python dev/run_optimization.py --algorithm scipy_de --popsize 2 --generations 1
 # → 36 evals (~5시간)
 
-# 더 많은 탐색 (큰 population)
-python dev/run_optimization.py --algorithm scipy_de --popsize 15 --generations 5
-# → 1350 evals (~5일)
+# 중간 실험 (더 많은 세대)
+python dev/run_optimization.py --algorithm scipy_de --popsize 5 --generations 20
+# → 90개체 × 20세대 = 1800 evals (~7일)
+
+# ❌ 권장하지 않음
+# python dev/run_optimization.py --algorithm scipy_de --popsize 10 --generations 4
+# → 세대가 너무 적어 수렴 불충분 (랜덤 샘플링과 유사)
 
 # 재현 가능한 실험 (seed 지정)
 python dev/run_optimization.py --algorithm scipy_de --seed 42
@@ -186,25 +190,36 @@ python dev/run_optimization.py \
 ```
 
 **주요 옵션 설명**:
-- `--popsize`: 탐색 범위 (기본값: 10, 권장: 5-15)
-  - 값이 클수록 더 넓은 영역 탐색 (느림)
-- `--generations`: 진화 세대 수 (기본값: 4, 권장: 3-10)
-  - 값이 클수록 더 정교한 수렴 (느림)
+- `--popsize`: 인구 크기 배수 (실제 인구 = popsize × 18)
+  - 권장: 4-5 (작은 인구로 더 많은 세대 진화)
+  - 기본값 10은 세대 수가 적을 때 비효율적
+- `--generations`: 진화 세대 수 ⚠️ **중요!**
+  - **최소 권장: 10세대** (진화 알고리즘이 제대로 작동하려면)
+  - 이상적: 20-50세대 (충분한 수렴)
+  - 기본값 4는 **불충분** (랜덤 샘플링과 유사한 결과)
 - `--seed`: 랜덤 시드 (기본값: None = 자동 생성)
   - 자동 생성된 시드는 결과 파일에 저장되어 재현 가능
   - 재현 필요시만 직접 지정: `--seed 42`
-- `--max-evals`: [고급] 강제 평가 제한 (선택사항)
 
-**실제 평가 횟수**: `popsize`와 `generations` 값에 따라 자동 계산
-- 기본값: **720회** (약 2-3일 소요)
-- 빠른 테스트: **36회** (약 5시간)
-- 더 많은 탐색: **1350회** (약 5일)
+**실제 평가 횟수**: `popsize × 18 × generations`
+- 권장 (720회): popsize=4, gen=10 (약 2-3일)
+- 빠른 테스트 (36회): popsize=2, gen=1 (약 5시간)
+- 중간 실험 (1800회): popsize=5, gen=20 (약 7일)
 
 **자동 생성 파일** (`data/output/` 디렉토리):
-- `best_parameters.json` - 최적 파라미터 (메인 결과)
-- `optimization_history_*.csv` - 전체 평가 히스토리
-- `optimization_history_*.png` - 수렴 그래프
-- `result_*.json` - 메타데이터 (seed, 알고리즘 설정 등)
+- `history_*.csv` - 전체 평가 히스토리 (generation, objective, 모든 파라미터)
+- `history_*.png` - 수렴 그래프
+- `result_*.json` - 최적 결과 (history와 동일한 파일명, seed/설정 포함)
+- `checkpoint_latest.pkl` - 체크포인트 (resume용)
+
+**아카이브** (`data/input/parameters/`, `data/output/results/`):
+- 모든 evaluation 파일 자동 보관 (eval_0001 ~ eval_NNNN)
+
+**결과 추출**:
+```bash
+# 완료된 history CSV에서 result JSON 생성
+python dev/utils/generate_result_from_history.py data/output/history_ScipyDE_best1bin_YYYYMMDD_HHMMSS.csv
+```
 
 **재현성**: 콘솔 출력과 result JSON에 자동 생성된 seed가 저장되므로, `--seed` 옵션으로 동일한 결과 재현 가능
 
