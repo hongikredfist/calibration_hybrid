@@ -113,9 +113,15 @@ def save_results(result, output_dir: Path, history_csv: Path = None):
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate filename with timestamp and algorithm name
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"result_{result.algorithm_name}_{timestamp}.json"
+    # Generate filename based on history CSV filename (if available)
+    if history_csv and history_csv.exists():
+        # Replace 'history_' with 'result_' and '.csv' with '.json'
+        filename = history_csv.stem.replace('history_', 'result_') + '.json'
+    else:
+        # Fallback to timestamp-based naming
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"result_{result.algorithm_name}_{timestamp}.json"
+
     filepath = output_dir / filename
 
     # Convert to JSON-serializable format
